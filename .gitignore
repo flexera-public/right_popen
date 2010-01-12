@@ -4,6 +4,7 @@ bin_71
 obj_71
 bin_90
 obj_90
+private.xml
 Makefile
 *.dll
 *.lib

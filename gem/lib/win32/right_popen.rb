@@ -110,7 +110,7 @@ module RightScale
     def notify_readable
       data = RightPopen.async_read(@stream_err)
       receive_data(data) if (data && data.length > 0)
-      force_detach unless data
+      detach unless data
     end
 
     def receive_data(data)

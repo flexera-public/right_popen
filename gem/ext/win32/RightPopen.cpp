@@ -1,9 +1,32 @@
+///////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010 RightScale Inc
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+///////////////////////////////////////////////////////////////////////////////
+
 #include "RightPopen.h"
 #include "PopenData.h"
 
 RightPopen::RightPopen()
 {
-    ::ZeroMemory(m_errorDescriptionBuffer, sizeof(m_errorDescriptionBuffer));
+	::ZeroMemory(m_errorDescriptionBuffer, sizeof(m_errorDescriptionBuffer));
 }
 
 RightPopen::~RightPopen()
@@ -31,29 +54,26 @@ RightPopen& RightPopen::getInstance()
 //
 //   noraise
 //      indicates whether or not raising exceptions is allowed
-extern "C"
+extern "C" static void right_popen_pipe_finalize(OpenFile* pOpenFile, int noraise)
 {
-    static void right_popen_pipe_finalize(OpenFile* pOpenFile, int noraise)
+    if (pOpenFile->f)
     {
-        if (pOpenFile->f)
-        {
-            fclose(pOpenFile->f);
-            pOpenFile->f = NULL;
-        }
+        fclose(pOpenFile->f);
+        pOpenFile->f = NULL;
+    }
 
-        if (pOpenFile->f2)
-        {
-            fclose(pOpenFile->f2);
-            pOpenFile->f2 = NULL;
-        }
+    if (pOpenFile->f2)
+    {
+        fclose(pOpenFile->f2);
+        pOpenFile->f2 = NULL;
+    }
 
-        // update exit status for child process, etc.
-        PopenData* pPopenData = PopenData::findByProcessId(pOpenFile->pid);
+    // update exit status for child process, etc.
+    PopenData* pPopenData = PopenData::findByProcessId(pOpenFile->pid);
 
-        if (NULL != pPopenData && pPopenData->notifyFinalized(pOpenFile))
-        {
-            delete pPopenData;
-        }
+    if (NULL != pPopenData && pPopenData->notifyFinalized(pOpenFile))
+    {
+        delete pPopenData;
     }
 }
 
@@ -153,7 +173,6 @@ char* RightPopen::getErrorDescription(DWORD dwErrorCode)
     }
     else
     {
-        memset(m_errorDescriptionBuffer, 0, sizeof(m_errorDescriptionBuffer));
         strncpy(m_errorDescriptionBuffer, (LPTSTR)hLocal, iLength - 2);  // remove \r\n
         ::LocalFree(hLocal);
     }
@@ -186,6 +205,7 @@ VALUE RightPopen::createRubyIoObject(DWORD pid, int iFileMode, HANDLE hFile, boo
                  : (bTextMode ? "w" : "wb");
     int fd = _open_osfhandle((long)hFile, iFileMode);
     FILE* pFile = _fdopen(fd, szMode);
+	FILE* pFile2 = NULL;
     int iRubyModeFlags = parseRubyIoModeFlags(szMode);
     VALUE pRubyIOObject = allocateRubyIoObject();
     OpenFile* pRubyOpenFile = NULL;
@@ -244,7 +264,7 @@ VALUE RightPopen::createRubyIoObject(DWORD pid, int iFileMode, HANDLE hFile, boo
 //
 // Throws:
 //  raises a Ruby RuntimeError on failure
-VALUE RightPopen::popen4(const char* szCommand, int iMode, bool bShowWindow, bool bAsynchronousOutput)
+VALUE RightPopen::popen4(char* szCommand, int iMode, bool bShowWindow, bool bAsynchronousOutput)
 {
     VALUE vReturnArray = Qnil;
     PopenData* pPopenData = new PopenData;
