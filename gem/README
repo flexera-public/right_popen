@@ -26,7 +26,6 @@ It relies on EventMachine for most of its internal mechanisms.
 The Windows implementation relies on a native C++ module which must
 currently be built using the MSVC 6.0 compiler due to a dependency
 on the standard libraries FILE struct provided by the "msvcrt.dll".
-Some of the C++ code is based on the win32/open3 gem's C implementation.
 
 The gem can be build manually on either Linux or Windows and will produce
 separate gem files depending on current platform. You must install the

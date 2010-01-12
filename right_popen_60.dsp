@@ -96,27 +96,11 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=gem\ext\win32\PopenAsyncIOData.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\PopenData.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\PopenIOHandlePair.cpp
-# End Source File
-# Begin Source File
-
 SOURCE="gem\ext\right_popen-i386-mswin32.def"
 # End Source File
 # Begin Source File
 
-SOURCE=gem\ext\win32\RightPopen.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\rubymain.cpp
+SOURCE=.\gem\ext\win32\right_popen.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -124,23 +108,7 @@ SOURCE=gem\ext\win32\rubymain.cpp
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=gem\ext\win32\PopenAsyncIOData.h
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\PopenData.h
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\PopenIOHandlePair.h
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\RightPopen.h
-# End Source File
-# Begin Source File
-
-SOURCE=gem\ext\win32\rubymain.h
+SOURCE=.\gem\ext\win32\right_popen.h
 # End Source File
 # End Group
 # Begin Group "Resource Files"

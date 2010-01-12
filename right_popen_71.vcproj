@@ -148,41 +148,14 @@
 			Name="Source Files"
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat">
 			<File
-				RelativePath="gem\ext\win32\PopenAsyncIOData.cpp">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\PopenData.cpp">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\PopenIOHandlePair.cpp">
-			</File>
-			<File
-				RelativePath="gem\ext\right_popen-i386-mswin32.def">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\RightPopen.cpp">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\rubymain.cpp">
+				RelativePath="gem\ext\win32\right_popen.c">
 			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl">
 			<File
-				RelativePath="gem\ext\win32\PopenAsyncIOData.h">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\PopenData.h">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\PopenIOHandlePair.h">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\RightPopen.h">
-			</File>
-			<File
-				RelativePath="gem\ext\win32\rubymain.h">
+				RelativePath="gem\ext\win32\right_popen.h">
 			</File>
 		</Filter>
 		<Filter
