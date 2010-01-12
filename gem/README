@@ -1,0 +1,34 @@
+Copyright (c) 2010 RightScale Inc
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+RightScale::popen3 allows running external processes aynchronously
+while still capturing their standard and error outputs.
+It relies on EventMachine for most of its internal mechanisms.
+
+The Windows implementation relies on a native C++ module which must
+currently be built using the MSVC 6.0 compiler due to a dependency
+on the standard libraries FILE struct provided by the "msvcrt.dll".
+Some of the C++ code is based on the win32/open3 gem's C implementation.
+
+The gem can be build manually on either Linux or Windows and will produce
+separate gem files depending on current platform. You must install the
+"rake" gem and then enter "rake build_binary_gem" from the directory
+containing the "Rakefile".
