@@ -1,12 +1,14 @@
 require 'rubygems'
 
 spec = Gem::Specification.new do |spec|
+  is_windows = RUBY_PLATFORM =~ /mswin/
+
   spec.name      = 'right-popen'
   spec.version   = '1.0.0'
   spec.authors   = ['Scott Messier', 'Raphael Simon']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
-  if RUBY_PLATFORM =~ /mswin/
+  if is_windows
     spec.platform = 'x86-mswin32-60'
   else
     spec.platform  = Gem::Platform::RUBY
@@ -22,17 +24,24 @@ Linux platforms and so additional gymnastics are provided here for
 Windows. A common interface hides implementation details from the caller.
 EOF
 
-  if RUBY_PLATFORM =~ /mswin/
+  if is_windows
     extension_dir = "ext,"
   else
     extension_dir = ""
   end
   candidates = Dir.glob("{#{extension_dir}lib,spec}/**/*") +
                ["README", "Rakefile", "right-popen.gemspec"]
-  spec.files = candidates.delete_if do |item|
+  candidates = candidates.delete_if do |item|
     item.include?("Makefile") || item.include?(".obj") || item.include?(".pdb") || item.include?(".def") || item.include?(".exp") || item.include?(".lib")
   end
-  spec.files.sort!
+  candidates = candidates.delete_if do |item|
+    if is_windows
+      item.include?("/linux/")
+    else
+      item.include?("/win32/")
+    end
+  end
+  spec.files = candidates.sort!
 end
 
 if $PROGRAM_NAME == __FILE__
