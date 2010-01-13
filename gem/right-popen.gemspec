@@ -14,14 +14,17 @@ spec = Gem::Specification.new do |spec|
     spec.platform  = Gem::Platform::RUBY
   end
   spec.summary   = 'Provides a platform-independent popen implementation'
-  spec.has_rdoc  = true
+  spec.has_rdoc = true
+  spec.rdoc_options = ["--main", "README.rdoc", "--title", "RightPopen"]
+  spec.extra_rdoc_files = ["README.rdoc"]
   spec.required_ruby_version = '>= 1.8.6'
+  spec.rubyforge_project = %q{right-popen}
 
   spec.description = <<-EOF
-The right-popen provides a platform-independent implemetation of the
-popen3 library. Ruby's built-in popen implementation only works under
-Linux platforms and so additional gymnastics are provided here for
-Windows. A common interface hides implementation details from the caller.
+RightPopen allows running external processes aynchronously while still
+capturing their standard and error outputs. It relies on EventMachine for most
+of its internal mechanisms. The linux implementation is valid for any linux
+platform but there is also a native implementation for Windows platforms.
 EOF
 
   if is_windows
@@ -30,7 +33,7 @@ EOF
     extension_dir = ""
   end
   candidates = Dir.glob("{#{extension_dir}lib,spec}/**/*") +
-               ["README", "Rakefile", "right-popen.gemspec"]
+               ["LICENSE", "README.rdoc", "Rakefile", "right-popen.gemspec"]
   candidates = candidates.delete_if do |item|
     item.include?("Makefile") || item.include?(".obj") || item.include?(".pdb") || item.include?(".def") || item.include?(".exp") || item.include?(".lib")
   end
@@ -42,6 +45,12 @@ EOF
     end
   end
   spec.files = candidates.sort!
+
+  # Current implementation doesn't support > 0.12.8, but support any patched 0.12.8.x versions.
+  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.8", "< 0.12.9"])
+  if is_windows
+    spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
+  end
 end
 
 if $PROGRAM_NAME == __FILE__

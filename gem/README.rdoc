@@ -1,0 +1,124 @@
+= RightPopen
+
+== DESCRIPTION
+
+=== Synopsis
+
+RightPopen allows running external processes aynchronously while still
+capturing their standard and error outputs. It relies on EventMachine for most
+of its internal mechanisms. The linux implementation is valid for any linux
+platform but there is also a native implementation for Windows platforms.
+
+Refer to the wiki (https://github.com/rightscale/right_popen/wikis) for up-to-date
+documentation.
+
+Also use the built-in issues tracker (https://github.com/rightscale/right_popen/issues)
+to report issues.
+
+
+== USAGE
+
+=== Simple Example
+
+  require 'rubygems'
+  require 'right_popen'
+  require 'eventmachine'
+
+  @stdout_text = ""
+  @stderr_text = ""
+  @exit_status = nil
+
+  def on_read_stdout(data)
+    @stdout_text << data
+  end
+
+  def on_read_stderr(data)
+    @stderr_text << data
+  end
+
+  def on_exit(status)
+    @exit_status = status
+  end
+
+  EM.run do
+    EM.next_tick do
+      cmd = "ruby -e \"puts 'some stdout text'; $stderr.puts 'some stderr text'\; exit 99\""
+      RightScale.popen3(cmd, self, :on_read_stdout, :on_read_stderr, :on_exit)
+    end
+    timer = EM::PeriodicTimer.new(0.1) do
+      if @exit_status
+        timer.cancel
+        EM.stop
+      end
+    end
+  end
+
+  puts "@stdout_text = #{@stdout_text}"
+  puts "@stderr_text = #{@stderr_text}"
+  puts "@exit_status.exitstatus = #{@exit_status.exitstatus}"
+
+
+== INSTALLATION
+
+RightPopen can be installed by entering the following at the command prompt:
+
+  gem install right-popen
+
+
+== BUILDING
+
+Install the following RubyGems required for building:
+* rake
+
+The Windows implementation relies on a native C module which must currently be
+built using the MSVC 6.0 compiler due to a dependency on the standard libraries
+FILE struct provided by the "msvcrt.dll".
+
+The gem can be built on Linux or Windows platforms and will produce separate gem
+files depending on current platform. Run the following command from the
+directory containing the "Rakefile":
+
+  rake build_binary_gem
+
+
+== TESTING
+
+Install the following RubyGems required for testing:
+* rspec
+
+The build can be tested using the RSpec gem. Create a link to the installed
+"spec" in your Ruby/bin directory (or see below for Windows) and run the
+following command from the gem directory to execute the RightPopen tests:
+
+  spec spec/right_popen_spec.rb
+
+Under Windows, you can create a "spec.cmd" file somewhere on your PATH with the
+following shell command (after substituting the correct version of RSpec):
+
+  ruby -rubygems c:\ruby\lib\ruby\gems\1.8\gems\rspec-1.2.5\bin\spec %*
+
+
+== LICENSE
+
+<b>RightPopen</b>
+
+Copyright:: Copyright (c) 2010 RightScale, Inc. 
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

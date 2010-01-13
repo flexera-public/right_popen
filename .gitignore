@@ -5,6 +5,7 @@ obj_71
 bin_90
 obj_90
 nbproject/private
+gem/doc
 Makefile
 *.dll
 *.lib

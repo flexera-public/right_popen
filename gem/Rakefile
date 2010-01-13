@@ -40,3 +40,9 @@ task :install_gem => [:build_binary_gem] do
    file = Dir["*.gem"].first
    sh "gem install #{file}"
 end
+
+desc 'Uninstalls and reinstalls the right-popen library as a gem'
+task :reinstall_gem do
+   sh "gem uninstall right-popen"
+   sh "rake install_gem"
+end

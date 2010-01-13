@@ -26,36 +26,71 @@
 # It relies on EventMachine for most of its internal mechanisms.
 
 require 'rubygems'
-require 'win32/process'
+begin
+  gem 'eventmachine', '=0.12.8.1'  # patched version for Windows-only socket close fix
+rescue Gem::LoadError
+  gem 'eventmachine', '=0.12.8'  # notify_readable is deprecated in 0.12.10
+end
 require 'eventmachine'
+require 'win32/process'
+
 require File.join(File.dirname(__FILE__), 'right_popen.so')  # win32 native code
 
 module RightScale
 
+  # Provides an eventmachine callback handler for the stdout stream.
   module StdOutHandler
 
-    # quacks like Process::Status, which we cannot instantiate ourselves because
-    # has no public new method. RightScale.popen3 needs this because the
-    # win32/process gem currently won't return Process::Status objects but only
-    # returns a [pid, exitstatus] value.
+    # Quacks like Process::Status, which we cannot instantiate ourselves because
+    # has no public new method. RightScale::popen3 needs this because the
+    # 'win32/process' gem currently won't return Process::Status objects but
+    # only returns a [pid, exitstatus] value.
     class Status
-      attr_accessor :pid, :exitstatus
+      # Process ID
+      attr_reader :pid
 
+      # Process exit code
+      attr_reader :exitstatus
+
+      # === Parameters
+      # pid(Integer): Process ID.
+      # 
+      # exitstatus(Integer): Process exit code
       def initialize(pid, exitstatus)
         @pid = pid
         @exitstatus = exitstatus
       end
 
+      # Simulates Process::Status.exited?
+      #
+      # === Returns
+      # true in all cases because this object cannot be returned until the
+      # process exits
       def exited?
-        # you can't have this object until the process exits, so...
         return true
       end
 
+      # Simulates Process::Status.success?
+      #
+      # === Returns
+      # true in if the process returned zero as its exit code
       def success?
         return @exitstatus ? (0 == @exitstatus) : true;
       end
     end
 
+    # === Parameters
+    # target(Object): Object defining handler methods to be called.
+    #
+    # stdout_handler(String): Token for stdout handler method name.
+    #
+    # exit_handler(String): Token for exit handler method name.
+    #
+    # stderr_eventable(Connector): EM object representing stderr handler.
+    #
+    # stream_out(IO): Standard output stream.
+    #
+    # pid(Integer): Child process ID.
     def initialize(target, stdout_handler, exit_handler, stderr_eventable, stream_out, pid)
       @target = target
       @stdout_handler = stdout_handler
@@ -66,17 +101,21 @@ module RightScale
       @status = nil
     end
 
+    # Callback from EM to asynchronously read the stdout stream. Note that this
+    # callback mechanism is deprecated after EM v0.12.8
     def notify_readable
       data = RightPopen.async_read(@stream_out)
       receive_data(data) if (data && data.length > 0)
       detach unless data
     end
 
+    # Callback from EM to receive data, which we also use to handle the
+    # asynchronous data we read ourselves.
     def receive_data(data)
       @target.method(@stdout_handler).call(data) if @stdout_handler
     end
 
-    # override of Connection.get_status for win32
+    # Override of Connection.get_status() for Windows implementation.
     def get_status
       unless @status
         begin
@@ -90,6 +129,7 @@ module RightScale
       return @status
     end
 
+    # Callback from EM to unbind.
     def unbind
       # We force the attached stderr handler to go away so that
       # we don't end up with a broken pipe
@@ -99,7 +139,15 @@ module RightScale
     end
   end
 
+  # Provides an eventmachine callback handler for the stderr stream.
   module StdErrHandler
+
+    # === Parameters
+    # target(Object): Object defining handler methods to be called.
+    #
+    # stderr_handler(String): Token for stderr handler method name.
+    # 
+    # stream_err(IO): Standard error stream.
     def initialize(target, stderr_handler, stream_err)
       @target = target
       @stderr_handler = stderr_handler
@@ -107,21 +155,27 @@ module RightScale
       @unbound = false
     end
 
+    # Callback from EM to asynchronously read the stderr stream. Note that this
+    # callback mechanism is deprecated after EM v0.12.8
     def notify_readable
       data = RightPopen.async_read(@stream_err)
       receive_data(data) if (data && data.length > 0)
       detach unless data
     end
 
+    # Callback from EM to receive data, which we also use to handle the
+    # asynchronous data we read ourselves.
     def receive_data(data)
       @target.method(@stderr_handler).call(data)
     end
 
+    # Callback from EM to unbind.
     def unbind
       @unbound = true
       @stream_err.close
     end
 
+    # Forces detachment of the stderr handler on EM's next tick.
     def force_detach
       # Use next tick to prevent issue in EM where descriptors list
       # gets out-of-sync when calling detach in an unbind callback
@@ -129,6 +183,28 @@ module RightScale
     end
   end
 
+  # Creates a child process and connects event handlers to the standard output
+  # and error streams used by the created process. Connectors use named pipes
+  # and asynchronous I/O in the native Windows implementation.
+  # 
+  # Streams the command's stdout and stderr to the given handlers. Time-
+  # ordering of bytes sent to stdout and stderr is not preserved.
+  #
+  # Calls given exit handler upon command process termination, passing in the
+  # resulting Process::Status.
+  #
+  # All handlers must be methods exposed by the given target.
+  #
+  # === Parameters
+  # cmd(String): command to execute, including any arguments.
+  #
+  # target(Object): object defining handler methods to be called.
+  #
+  # stdout_handler(String): token for stdout handler method name.
+  #
+  # stderr_handler(String): token for stderr handler method name.
+  #
+  # exit_handler(String): token for exit handler method name.
   def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
 

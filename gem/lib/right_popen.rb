@@ -32,6 +32,12 @@ else
 end
 
 module RightScale
+
+  # Closes all open I/O objects in the object space, keeping any provided as
+  # arguments.
+  #
+  # === Parameters
+  # keep(Array):: array of I/O objects to keep.
   def self.close_all_fd(keep = [])
     keep = [keep] unless keep.is_a? Array
     keep += [$stdin, $stdout, $stderr]
@@ -47,4 +53,5 @@ module RightScale
       end
     end
   end
+
 end

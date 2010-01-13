@@ -25,25 +25,43 @@
 # while still capturing their standard and error outputs.
 # It relies on EventMachine for most of its internal mechanisms.
 
+require 'rubygems'
+gem 'eventmachine', '=0.12.8'  # has only been tested with 0.12.8
 require 'eventmachine'
 
 module RightScale
 
+  # Provides an eventmachine callback handler for the stdout stream.
   module StdOutHandler
-    def initialize(target, stdout_handler, exit_handler, c, r, w)
+
+    # === Parameters
+    # target(Object): Object defining handler methods to be called.
+    #
+    # stdout_handler(String): Token for stdout handler method name.
+    #
+    # exit_handler(String): Token for exit handler method name.
+    #
+    # stderr_eventable(Connector): EM object representing stderr handler.
+    #
+    # read_fd(IO): Standard output read file descriptor.
+    #
+    # write_fd(IO): Standard output write file descriptor.
+    def initialize(target, stdout_handler, exit_handler, stderr_eventable, read_fd, write_fd)
       @target = target
       @stdout_handler = stdout_handler
       @exit_handler = exit_handler
-      @stderr_eventable = c
+      @stderr_eventable = stderr_eventable
       # Just so they don't get GCed before the process goes away
-      @read_fd = r
-      @write_fd = w
+      @read_fd = read_fd
+      @write_fd = write_fd
     end
 
+    # Callback from EM to receive data.
     def receive_data(data)
       @target.method(@stdout_handler).call(data) if @stdout_handler
     end
 
+    # Callback from EM to unbind.
     def unbind
       # We force the attached stderr handler to go away so that
       # we don't end up with a broken pipe
@@ -53,20 +71,28 @@ module RightScale
   end
 
   module StdErrHandler
+
+    # === Parameters
+    # target(Object): Object defining handler methods to be called.
+    #
+    # stderr_handler(String): Token for stderr handler method name.
     def initialize(target, stderr_handler)
       @target = target
       @stderr_handler = stderr_handler
       @unbound = false
     end
 
+    # Callback from EM to receive data.
     def receive_data(data)
       @target.method(@stderr_handler).call(data)
     end
 
+    # Callback from EM to unbind.
     def unbind
       @unbound = true
     end
 
+    # Forces detachment of the stderr handler on EM's next tick.
     def force_detach
       # Use next tick to prevent issue in EM where descriptors list
       # gets out-of-sync when calling detach in an unbind callback
@@ -74,16 +100,27 @@ module RightScale
     end
   end
 
-  # Fork process to run given command asynchronously, hooking all three
+  # Forks process to run given command asynchronously, hooking all three
   # standard streams of the child process.
   #
-  # Stream the command's stdout and stderr to the given handlers. Time-
+  # Streams the command's stdout and stderr to the given handlers. Time-
   # ordering of bytes sent to stdout and stderr is not preserved.
   #
-  # Call given exit handler upon command process termination, passing in the
+  # Calls given exit handler upon command process termination, passing in the
   # resulting Process::Status.
   #
   # All handlers must be methods exposed by the given target.
+  #
+  # === Parameters
+  # cmd(String): command to execute, including any arguments.
+  #
+  # target(Object): object defining handler methods to be called.
+  #
+  # stdout_handler(String): token for stdout handler method name.
+  #
+  # stderr_handler(String): token for stderr handler method name.
+  #
+  # exit_handler(String): token for exit handler method name.
   def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     EM.next_tick do
