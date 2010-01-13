@@ -87,15 +87,11 @@ Install the following RubyGems required for testing:
 * rspec
 
 The build can be tested using the RSpec gem. Create a link to the installed
-"spec" in your Ruby/bin directory (or see below for Windows) and run the
-following command from the gem directory to execute the RightPopen tests:
+"spec" in your Ruby/bin directory (or ensure the bin directory is on the PATH
+under Windows) and run the following command from the gem directory to execute
+the RightPopen tests:
 
   spec spec/right_popen_spec.rb
-
-Under Windows, you can create a "spec.cmd" file somewhere on your PATH with the
-following shell command (after substituting the correct version of RSpec):
-
-  ruby -rubygems c:\ruby\lib\ruby\gems\1.8\gems\rspec-1.2.5\bin\spec %*
 
 
 == LICENSE
