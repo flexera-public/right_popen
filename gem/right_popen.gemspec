@@ -3,8 +3,8 @@ require 'rubygems'
 spec = Gem::Specification.new do |spec|
   is_windows = RUBY_PLATFORM =~ /mswin/
 
-  spec.name      = 'right-popen'
-  spec.version   = '1.0.0'
+  spec.name      = 'right_popen'
+  spec.version   = '1.0.1'
   spec.authors   = ['Scott Messier', 'Raphael Simon']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
@@ -18,12 +18,12 @@ spec = Gem::Specification.new do |spec|
   spec.rdoc_options = ["--main", "README.rdoc", "--title", "RightPopen"]
   spec.extra_rdoc_files = ["README.rdoc"]
   spec.required_ruby_version = '>= 1.8.6'
-  spec.rubyforge_project = %q{right-popen}
+  spec.rubyforge_project = %q{right_popen}
 
   spec.description = <<-EOF
 RightPopen allows running external processes aynchronously while still
 capturing their standard and error outputs. It relies on EventMachine for most
-of its internal mechanisms. The linux implementation is valid for any linux
+of its internal mechanisms. The Linux implementation is valid for any Linux
 platform but there is also a native implementation for Windows platforms.
 EOF
 
@@ -33,7 +33,7 @@ EOF
     extension_dir = ""
   end
   candidates = Dir.glob("{#{extension_dir}lib,spec}/**/*") +
-               ["LICENSE", "README.rdoc", "Rakefile", "right-popen.gemspec"]
+               ["LICENSE", "README.rdoc", "Rakefile", "right_popen.gemspec"]
   candidates = candidates.delete_if do |item|
     item.include?("Makefile") || item.include?(".obj") || item.include?(".pdb") || item.include?(".def") || item.include?(".exp") || item.include?(".lib")
   end

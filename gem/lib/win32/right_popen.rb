@@ -53,9 +53,9 @@ module RightScale
       attr_reader :exitstatus
 
       # === Parameters
-      # pid(Integer): Process ID.
+      # pid(Integer):: Process ID.
       # 
-      # exitstatus(Integer): Process exit code
+      # exitstatus(Integer):: Process exit code
       def initialize(pid, exitstatus)
         @pid = pid
         @exitstatus = exitstatus
@@ -73,24 +73,24 @@ module RightScale
       # Simulates Process::Status.success?
       #
       # === Returns
-      # true in if the process returned zero as its exit code
+      # true if the process returned zero as its exit code
       def success?
         return @exitstatus ? (0 == @exitstatus) : true;
       end
     end
 
     # === Parameters
-    # target(Object): Object defining handler methods to be called.
+    # target(Object):: Object defining handler methods to be called.
     #
-    # stdout_handler(String): Token for stdout handler method name.
+    # stdout_handler(String):: Token for stdout handler method name.
     #
-    # exit_handler(String): Token for exit handler method name.
+    # exit_handler(String):: Token for exit handler method name.
     #
-    # stderr_eventable(Connector): EM object representing stderr handler.
+    # stderr_eventable(Connector):: EM object representing stderr handler.
     #
-    # stream_out(IO): Standard output stream.
+    # stream_out(IO):: Standard output stream.
     #
-    # pid(Integer): Child process ID.
+    # pid(Integer):: Child process ID.
     def initialize(target, stdout_handler, exit_handler, stderr_eventable, stream_out, pid)
       @target = target
       @stdout_handler = stdout_handler
@@ -143,11 +143,11 @@ module RightScale
   module StdErrHandler
 
     # === Parameters
-    # target(Object): Object defining handler methods to be called.
+    # target(Object):: Object defining handler methods to be called.
     #
-    # stderr_handler(String): Token for stderr handler method name.
+    # stderr_handler(String):: Token for stderr handler method name.
     # 
-    # stream_err(IO): Standard error stream.
+    # stream_err(IO):: Standard error stream.
     def initialize(target, stderr_handler, stream_err)
       @target = target
       @stderr_handler = stderr_handler

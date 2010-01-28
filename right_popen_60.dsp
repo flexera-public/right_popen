@@ -124,7 +124,7 @@ SOURCE=gem\README
 # End Source File
 # Begin Source File
 
-SOURCE="gem\right-popen.gemspec"
+SOURCE="gem\right_popen.gemspec"
 # End Source File
 # End Group
 # End Target

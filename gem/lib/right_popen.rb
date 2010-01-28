@@ -30,28 +30,3 @@ if RUBY_PLATFORM =~ /mswin/
 else
   require File.expand_path(File.join(File.dirname(__FILE__), 'linux', 'right_popen'))
 end
-
-module RightScale
-
-  # Closes all open I/O objects in the object space, keeping any provided as
-  # arguments.
-  #
-  # === Parameters
-  # keep(Array):: array of I/O objects to keep.
-  def self.close_all_fd(keep = [])
-    keep = [keep] unless keep.is_a? Array
-    keep += [$stdin, $stdout, $stderr]
-    keep = keep.collect { |io| io.fileno }
-
-    ObjectSpace.each_object(IO) do |io|
-      unless io.closed? || keep.include?(io.fileno)
-        begin
-          io.close
-        rescue Exception
-        #do nothing
-        end
-      end
-    end
-  end
-
-end

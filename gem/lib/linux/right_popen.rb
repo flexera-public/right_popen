@@ -35,17 +35,17 @@ module RightScale
   module StdOutHandler
 
     # === Parameters
-    # target(Object): Object defining handler methods to be called.
+    # target(Object):: Object defining handler methods to be called.
     #
-    # stdout_handler(String): Token for stdout handler method name.
+    # stdout_handler(String):: Token for stdout handler method name.
     #
-    # exit_handler(String): Token for exit handler method name.
+    # exit_handler(String):: Token for exit handler method name.
     #
-    # stderr_eventable(Connector): EM object representing stderr handler.
+    # stderr_eventable(Connector):: EM object representing stderr handler.
     #
-    # read_fd(IO): Standard output read file descriptor.
+    # read_fd(IO):: Standard output read file descriptor.
     #
-    # write_fd(IO): Standard output write file descriptor.
+    # write_fd(IO):: Standard output write file descriptor.
     def initialize(target, stdout_handler, exit_handler, stderr_eventable, read_fd, write_fd)
       @target = target
       @stdout_handler = stdout_handler
@@ -73,9 +73,9 @@ module RightScale
   module StdErrHandler
 
     # === Parameters
-    # target(Object): Object defining handler methods to be called.
+    # target(Object):: Object defining handler methods to be called.
     #
-    # stderr_handler(String): Token for stderr handler method name.
+    # stderr_handler(String):: Token for stderr handler method name.
     def initialize(target, stderr_handler)
       @target = target
       @stderr_handler = stderr_handler
@@ -112,15 +112,15 @@ module RightScale
   # All handlers must be methods exposed by the given target.
   #
   # === Parameters
-  # cmd(String): command to execute, including any arguments.
+  # cmd(String):: command to execute, including any arguments.
   #
-  # target(Object): object defining handler methods to be called.
+  # target(Object):: object defining handler methods to be called.
   #
-  # stdout_handler(String): token for stdout handler method name.
+  # stdout_handler(String):: token for stdout handler method name.
   #
-  # stderr_handler(String): token for stderr handler method name.
+  # stderr_handler(String):: token for stderr handler method name.
   #
-  # exit_handler(String): token for exit handler method name.
+  # exit_handler(String):: token for exit handler method name.
   def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     EM.next_tick do

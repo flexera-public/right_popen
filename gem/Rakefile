@@ -7,7 +7,7 @@ require 'rbconfig'
 
 include Config
 
-desc "Clean any build files for right-popen"
+desc "Clean any build files for right_popen"
 task :clean do
   if File.exists?('ext/Makefile')
     Dir.chdir('ext') do
@@ -17,7 +17,7 @@ task :clean do
   rm 'lib/win32/right_popen.so' if File.file?('lib/win32/right_popen.so')
 end
 
-desc "Build right-popen (but don't install it)"
+desc "Build right_popen (but don't install it)"
 task :build => [:clean] do
   if RUBY_PLATFORM =~ /mswin/
     Dir.chdir('ext') do
@@ -32,17 +32,17 @@ end
 desc "Build a binary gem"
 task :build_binary_gem => [:build] do
    Dir["*.gem"].each { |gem| rm gem }
-   ruby 'right-popen.gemspec'
+   ruby 'right_popen.gemspec'
 end
 
-desc 'Install the right-popen library as a gem'
+desc 'Install the right_popen library as a gem'
 task :install_gem => [:build_binary_gem] do
    file = Dir["*.gem"].first
    sh "gem install #{file}"
 end
 
-desc 'Uninstalls and reinstalls the right-popen library as a gem'
+desc 'Uninstalls and reinstalls the right_popen library as a gem'
 task :reinstall_gem do
-   sh "gem uninstall right-popen"
+   sh "gem uninstall right_popen"
    sh "rake install_gem"
 end

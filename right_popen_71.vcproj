@@ -168,7 +168,7 @@
 				RelativePath="gem\Readme">
 			</File>
 			<File
-				RelativePath="gem\right-popen.gemspec">
+				RelativePath="gem\right_popen.gemspec">
 			</File>
 		</Filter>
 	</Files>

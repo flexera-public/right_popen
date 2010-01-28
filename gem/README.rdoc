@@ -6,7 +6,7 @@
 
 RightPopen allows running external processes aynchronously while still
 capturing their standard and error outputs. It relies on EventMachine for most
-of its internal mechanisms. The linux implementation is valid for any linux
+of its internal mechanisms. The Linux implementation is valid for any Linux
 platform but there is also a native implementation for Windows platforms.
 
 Refer to the wiki (https://github.com/rightscale/right_popen/wikis) for up-to-date
@@ -22,7 +22,6 @@ to report issues.
 
   require 'rubygems'
   require 'right_popen'
-  require 'eventmachine'
 
   @stdout_text = ""
   @stderr_text = ""
@@ -62,7 +61,7 @@ to report issues.
 
 RightPopen can be installed by entering the following at the command prompt:
 
-  gem install right-popen
+  gem install right_popen
 
 
 == BUILDING

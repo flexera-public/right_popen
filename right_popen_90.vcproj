@@ -4,6 +4,7 @@
 	Version="9.00"
 	Name="right_popen"
 	ProjectGUID="{DCCAA5E8-F06D-487E-A4E8-30838755462D}"
+	RootNamespace="right_popen"
 	TargetFrameworkVersion="131072"
 	>
 	<Platforms>
@@ -243,7 +244,7 @@
 				>
 			</File>
 			<File
-				RelativePath="gem\right-popen.gemspec"
+				RelativePath=".\gem\right_popen.gemspec"
 				>
 			</File>
 		</Filter>
