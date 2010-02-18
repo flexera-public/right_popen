@@ -46,3 +46,8 @@ task :reinstall_gem do
    sh "gem uninstall right_popen"
    sh "rake install_gem"
 end
+
+desc 'Runs all spec tests'
+task :spec do
+  sh "spec spec/*_spec.rb"
+end

@@ -10,31 +10,72 @@ EXIT_STATUS      = 146
 # for a quick smoke test
 LARGE_OUTPUT_COUNTER = 1000
 
+# bump up count for most exhaustive leak detection.
+REPEAT_TEST_COUNTER = 256
+
 describe 'RightScale::popen3' do
 
   module RightPopenSpec
 
     class Runner
       def initialize
-        @done        = false
-        @output_text = ''
-        @error_text  = ''
-        @status      = nil
+        @done           = false
+        @output_text    = nil
+        @error_text     = nil
+        @status         = nil
+        @last_exception = nil
+        @last_iteration = 0
       end
 
       attr_reader :output_text, :error_text, :status
 
-      def run_right_popen(command)
+      def do_right_popen(command)
+        @output_text = ''
+        @error_text  = ''
+        @status      = nil
+        RightScale.popen3(command, self, :on_read_stdout, :on_read_stderr, :on_exit)
+      end
+
+      def run_right_popen(command, count = 1)
+        puts "#{count}>" if count > 1
+        last_iteration = 0
         EM.next_tick do
-          RightScale.popen3(command, self, :on_read_stdout, :on_read_stderr, :on_exit)
+          do_right_popen(command)
         end
         EM.run do
-          timer = EM::PeriodicTimer.new(0.1) do
-            if @done
+          timer = EM::PeriodicTimer.new(0.05) do
+            begin
+              if @done || @last_exception
+                last_iteration = last_iteration + 1
+                if @last_exception.nil? && last_iteration < count
+                  @done = false
+                  EM.next_tick do
+                    if count > 1
+                      print '+'
+                      STDOUT.flush
+                    end
+                    do_right_popen(command)
+                  end
+                else
+                  puts "<" if count > 1
+                  timer.cancel
+                  EM.stop
+                end
+              end
+            rescue Exception => e
+              @last_exception = e
               timer.cancel
               EM.stop
             end
           end
+        end
+        if @last_exception
+          if count > 1
+            message = "<#{last_iteration + 1}\n#{last_exception.message}"
+          else
+            message = last_exception.message
+          end
+          raise @last_exception.class, "#{message}\n#{@last_exception.backtrace.join("\n")}"
         end
       end
 
@@ -120,6 +161,15 @@ describe 'RightScale::popen3' do
       (results << "stderr #{i}\n") if 0 == i % 10
     end
     runner.error_text.should == results
+  end
+
+  it 'should run repeatedly without leaking resources' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command, REPEAT_TEST_COUNTER)
+    runner.status.exitstatus.should == 0
+    runner.output_text.should == STANDARD_MESSAGE + "\n"
+    runner.error_text.should == ERROR_MESSAGE + "\n"
   end
 
 end
