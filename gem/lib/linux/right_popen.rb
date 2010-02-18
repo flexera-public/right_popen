@@ -123,6 +123,7 @@ module RightScale
   # exit_handler(String):: token for exit handler method name.
   def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
+    GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
       saved_stderr = $stderr.dup
       r, w = Socket::pair(Socket::AF_LOCAL, Socket::SOCK_STREAM, 0)#IO::pipe
