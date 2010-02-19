@@ -26,11 +26,6 @@
 # It relies on EventMachine for most of its internal mechanisms.
 
 require 'rubygems'
-begin
-  gem 'eventmachine', '=0.12.8.1'  # patched version for Windows-only socket close fix
-rescue Gem::LoadError
-  gem 'eventmachine', '=0.12.8'  # notify_readable is deprecated in 0.12.10
-end
 require 'eventmachine'
 require 'win32/process'
 

@@ -46,8 +46,8 @@ EOF
   end
   spec.files = candidates.sort!
 
-  # Current implementation doesn't support > 0.12.8, but support any patched 0.12.8.x versions.
-  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.8", "< 0.12.9"])
+  # Current implementation supports > 0.12.8
+  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.8"])
   if is_windows
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
   end

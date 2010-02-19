@@ -26,7 +26,6 @@
 # It relies on EventMachine for most of its internal mechanisms.
 
 require 'rubygems'
-gem 'eventmachine', '=0.12.8'  # has only been tested with 0.12.8
 require 'eventmachine'
 
 module RightScale
