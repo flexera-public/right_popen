@@ -4,7 +4,7 @@ spec = Gem::Specification.new do |spec|
   is_windows = RUBY_PLATFORM =~ /mswin/
 
   spec.name      = 'right_popen'
-  spec.version   = '1.0.2'
+  spec.version   = '1.0.3'
   spec.authors   = ['Scott Messier', 'Raphael Simon']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
