@@ -35,15 +35,10 @@ module RightScale
 
     # === Parameters
     # target(Object):: Object defining handler methods to be called.
-    #
     # stdout_handler(String):: Token for stdout handler method name.
-    #
     # exit_handler(String):: Token for exit handler method name.
-    #
     # stderr_eventable(Connector):: EM object representing stderr handler.
-    #
     # read_fd(IO):: Standard output read file descriptor.
-    #
     # write_fd(IO):: Standard output write file descriptor.
     def initialize(target, stdout_handler, exit_handler, stderr_eventable, read_fd, write_fd)
       @target = target
@@ -75,10 +70,12 @@ module RightScale
     # target(Object):: Object defining handler methods to be called.
     #
     # stderr_handler(String):: Token for stderr handler method name.
-    def initialize(target, stderr_handler)
+    # read_fd(IO):: Error output read file descriptor.
+    def initialize(target, stderr_handler, read_fd)
       @target = target
       @stderr_handler = stderr_handler
       @unbound = false
+      @read_fd = read_fd # So it doesn't get GCed
     end
 
     # Callback from EM to receive data.
@@ -112,14 +109,13 @@ module RightScale
   #
   # === Parameters
   # cmd(String):: command to execute, including any arguments.
-  #
   # target(Object):: object defining handler methods to be called.
-  #
   # stdout_handler(String):: token for stdout handler method name.
-  #
   # stderr_handler(String):: token for stderr handler method name.
-  #
   # exit_handler(String):: token for exit handler method name.
+  #
+  # === Returns
+  # true:: Always returns true
   def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     GC.start # To garbage collect open file descriptors from passed executions
@@ -128,12 +124,13 @@ module RightScale
       r, w = Socket::pair(Socket::AF_LOCAL, Socket::SOCK_STREAM, 0)#IO::pipe
 
       $stderr.reopen w
-      c = EM.attach(r, StdErrHandler, target, stderr_handler) if stderr_handler
+      c = EM.attach(r, StdErrHandler, target, stderr_handler, r) if stderr_handler
       EM.popen(cmd, StdOutHandler, target, stdout_handler, exit_handler, c, r, w)
       # Do not close 'w', strange things happen otherwise
       # (command protocol socket gets closed during decommission) 
       $stderr.reopen saved_stderr
     end
+    true
   end
 
 end
