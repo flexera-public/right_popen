@@ -33,7 +33,11 @@ describe 'RightScale::popen3' do
         @output_text = ''
         @error_text  = ''
         @status      = nil
-        RightScale.popen3(command, self, :on_read_stdout, :on_read_stderr, :on_exit)
+        RightScale.popen3(:command        => command, 
+                          :target         => self, 
+                          :stdout_handler => :on_read_stdout, 
+                          :stderr_handler => :on_read_stderr, 
+                          :exit_handler   => :on_exit)
       end
 
       def run_right_popen(command, count = 1)

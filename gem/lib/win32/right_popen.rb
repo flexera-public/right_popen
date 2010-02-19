@@ -1,4 +1,4 @@
-#
+#--
 # Copyright (c) 2009 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -19,11 +19,7 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
-
-# RightScale.popen3 allows running external processes aynchronously
-# while still capturing their standard and error outputs.
-# It relies on EventMachine for most of its internal mechanisms.
+#++
 
 require 'rubygems'
 require 'eventmachine'
@@ -76,15 +72,10 @@ module RightScale
 
     # === Parameters
     # target(Object):: Object defining handler methods to be called.
-    #
     # stdout_handler(String):: Token for stdout handler method name.
-    #
     # exit_handler(String):: Token for exit handler method name.
-    #
     # stderr_eventable(Connector):: EM object representing stderr handler.
-    #
     # stream_out(IO):: Standard output stream.
-    #
     # pid(Integer):: Child process ID.
     def initialize(target, stdout_handler, exit_handler, stderr_eventable, stream_out, pid)
       @target = target
@@ -181,26 +172,9 @@ module RightScale
   # Creates a child process and connects event handlers to the standard output
   # and error streams used by the created process. Connectors use named pipes
   # and asynchronous I/O in the native Windows implementation.
-  # 
-  # Streams the command's stdout and stderr to the given handlers. Time-
-  # ordering of bytes sent to stdout and stderr is not preserved.
   #
-  # Calls given exit handler upon command process termination, passing in the
-  # resulting Process::Status.
-  #
-  # All handlers must be methods exposed by the given target.
-  #
-  # === Parameters
-  # cmd(String): command to execute, including any arguments.
-  #
-  # target(Object): object defining handler methods to be called.
-  #
-  # stdout_handler(String): token for stdout handler method name.
-  #
-  # stderr_handler(String): token for stderr handler method name.
-  #
-  # exit_handler(String): token for exit handler method name.
-  def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
+  # See RightScale.popen3
+  def self.popen3_imp(options)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
 
     # launch cmd and request asynchronous output (which is only provided by
@@ -208,7 +182,7 @@ module RightScale
     mode = "t"
     show_window = false
     asynchronous_output = true
-    stream_in, stream_out, stream_err, pid = RightPopen.popen4(cmd, mode, show_window, asynchronous_output)
+    stream_in, stream_out, stream_err, pid = RightPopen.popen4(options[:command], mode, show_window, asynchronous_output)
 
     # close input immediately.
     stream_in.close
@@ -216,8 +190,8 @@ module RightScale
     # attach handlers to event machine and let it monitor incoming data. the
     # streams aren't used directly by the connectors except that they are closed
     # on unbind.
-    stderr_eventable = EM.attach(stream_err, StdErrHandler, target, stderr_handler, stream_err) if stderr_handler
-    EM.attach(stream_out, StdOutHandler, target, stdout_handler, exit_handler, stderr_eventable, stream_out, pid)
+    stderr_eventable = EM.attach(stream_err, StdErrHandler, options[:target], options[:stderr_handler], stream_err) if stderr_handler
+    EM.attach(stream_out, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], stderr_eventable, stream_out, pid)
 
     # note that control returns to the caller, but the launched cmd continues
     # running and sends output to the handlers. the caller is not responsible

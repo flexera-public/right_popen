@@ -1,4 +1,4 @@
-#
+#--
 # Copyright (c) 2009 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -19,7 +19,7 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
+#++
 
 # RightScale.popen3 allows running external processes aynchronously
 # while still capturing their standard and error outputs.
@@ -29,4 +29,37 @@ if RUBY_PLATFORM =~ /mswin/
   require File.expand_path(File.join(File.dirname(__FILE__), 'win32', 'right_popen'))
 else
   require File.expand_path(File.join(File.dirname(__FILE__), 'linux', 'right_popen'))
+end
+
+module RightScale
+
+  # Spawn process to run given command asynchronously, hooking all three
+  # standard streams of the child process.
+  #
+  # Streams the command's stdout and stderr to the given handlers. Time-
+  # ordering of bytes sent to stdout and stderr is not preserved.
+  #
+  # Calls given exit handler upon command process termination, passing in the
+  # resulting Process::Status.
+  #
+  # All handlers must be methods exposed by the given target.
+  #
+  # === Parameters
+  # options[:command](String):: Command to execute, including any arguments
+  # options[:environment](Hash):: Hash of environment variables values keyed by name
+  # options[:target](Object):: object defining handler methods to be called, optional (no handlers can be defined if not specified)
+  # options[:stdout_handler](String):: Stdout handler method name, optional
+  # options[:stderr_handler](String):: Stderr handler method name, optional
+  # options[:exit_handler](String):: Exit handler method name, optional
+  #
+  # === Returns
+  # true:: Always returns true
+  def self.popen3(options)
+    raise "EventMachine reactor must be started" unless EM.reactor_running?
+    raise "Missing command" unless options[:command]
+    raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler]
+    RightScale.popen3_imp(options)
+    true
+  end
+
 end

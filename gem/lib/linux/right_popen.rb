@@ -1,4 +1,4 @@
-#
+#--
 # Copyright (c) 2009 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -19,7 +19,7 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
+#++
 
 # RightScale.popen3 allows running external processes aynchronously
 # while still capturing their standard and error outputs.
@@ -99,33 +99,18 @@ module RightScale
   # Forks process to run given command asynchronously, hooking all three
   # standard streams of the child process.
   #
-  # Streams the command's stdout and stderr to the given handlers. Time-
-  # ordering of bytes sent to stdout and stderr is not preserved.
-  #
-  # Calls given exit handler upon command process termination, passing in the
-  # resulting Process::Status.
-  #
-  # All handlers must be methods exposed by the given target.
-  #
-  # === Parameters
-  # cmd(String):: command to execute, including any arguments.
-  # target(Object):: object defining handler methods to be called.
-  # stdout_handler(String):: token for stdout handler method name.
-  # stderr_handler(String):: token for stderr handler method name.
-  # exit_handler(String):: token for exit handler method name.
-  #
-  # === Returns
-  # true:: Always returns true
-  def self.popen3(cmd, target, stdout_handler = nil, stderr_handler = nil, exit_handler = nil)
-    raise "EventMachine reactor must be started" unless EM.reactor_running?
+  # See RightScale.popen3
+  def self.popen3_imp(options)
+    cmd = options[:command].dup
+    options[:environment].each { |k, v| cmd = "#{k}=#{v} " + cmd } if options[:environment]
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
       saved_stderr = $stderr.dup
       r, w = Socket::pair(Socket::AF_LOCAL, Socket::SOCK_STREAM, 0)#IO::pipe
 
       $stderr.reopen w
-      c = EM.attach(r, StdErrHandler, target, stderr_handler, r) if stderr_handler
-      EM.popen(cmd, StdOutHandler, target, stdout_handler, exit_handler, c, r, w)
+      c = EM.attach(r, StdErrHandler, options[:target], options[:stderr_handler], r) if options[:stderr_handler]
+      EM.popen(options[:command], StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], c, r, w)
       # Do not close 'w', strange things happen otherwise
       # (command protocol socket gets closed during decommission) 
       $stderr.reopen saved_stderr
