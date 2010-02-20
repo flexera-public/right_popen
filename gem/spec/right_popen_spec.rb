@@ -1,5 +1,4 @@
 require File.join(File.dirname(__FILE__), 'spec_helper')
-require 'right_popen'
 
 RUBY_CMD         = 'ruby'
 STANDARD_MESSAGE = 'Standard message'
@@ -29,22 +28,23 @@ describe 'RightScale::popen3' do
 
       attr_reader :output_text, :error_text, :status
 
-      def do_right_popen(command)
+      def do_right_popen(command, env=nil)
         @output_text = ''
         @error_text  = ''
         @status      = nil
         RightScale.popen3(:command        => command, 
                           :target         => self, 
+                          :environment    => env,
                           :stdout_handler => :on_read_stdout, 
                           :stderr_handler => :on_read_stderr, 
                           :exit_handler   => :on_exit)
       end
 
-      def run_right_popen(command, count = 1)
+      def run_right_popen(command, env=nil, count = 1)
         puts "#{count}>" if count > 1
         last_iteration = 0
         EM.next_tick do
-          do_right_popen(command)
+          do_right_popen(command, env)
         end
         EM.run do
           timer = EM::PeriodicTimer.new(0.05) do
@@ -58,7 +58,7 @@ describe 'RightScale::popen3' do
                       print '+'
                       STDOUT.flush
                     end
-                    do_right_popen(command)
+                    do_right_popen(command, env)
                   end
                 else
                   puts "<" if count > 1
@@ -166,11 +166,35 @@ describe 'RightScale::popen3' do
     end
     runner.error_text.should == results
   end
+  
+  it 'should setup environment variables' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command)
+    runner.status.exitstatus.should == 0
+    runner.output_text.should_not include('_test_')
+    runner.run_right_popen(command, :__test__ => '42')
+    runner.status.exitstatus.should == 0
+    runner.output_text.should match(/^__test__=42$/)
+  end
+
+  it 'should restore environment variables' do
+    ENV['__test__'] = '41'
+    old_envs = {}
+    ENV.each { |k, v| old_envs[k] = v }
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command, :__test__ => '42')
+    runner.status.exitstatus.should == 0
+    runner.output_text.should match(/^__test__=42$/)
+    ENV.each { |k, v| old_envs[k].should == v }
+    old_envs.each { |k, v| ENV[k].should == v }
+  end
 
   it 'should run repeatedly without leaking resources' do
     command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
     runner = RightPopenSpec::Runner.new
-    runner.run_right_popen(command, REPEAT_TEST_COUNTER)
+    runner.run_right_popen(command, nil, REPEAT_TEST_COUNTER)
     runner.status.exitstatus.should == 0
     runner.output_text.should == STANDARD_MESSAGE + "\n"
     runner.error_text.should == ERROR_MESSAGE + "\n"

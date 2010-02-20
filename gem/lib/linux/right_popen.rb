@@ -102,7 +102,6 @@ module RightScale
   # See RightScale.popen3
   def self.popen3_imp(options)
     cmd = options[:command].dup
-    options[:environment].each { |k, v| cmd = "#{k}=#{v} " + cmd } if options[:environment]
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
       saved_stderr = $stderr.dup
@@ -110,7 +109,25 @@ module RightScale
 
       $stderr.reopen w
       c = EM.attach(r, StdErrHandler, options[:target], options[:stderr_handler], r) if options[:stderr_handler]
-      EM.popen(options[:command], StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], c, r, w)
+
+      # Setup environment for child process
+      envs = {}
+      options[:environment].each { |k, v| envs[k.to_s] = v } if options[:environment]
+      unless envs.empty?
+        old_envs = {}
+        ENV.each { |k, v| old_envs[k] = v if envs.include?(k) }
+        envs.each { |k, v| ENV[k] = v }
+      end
+
+      # Launch child process
+      EM.popen(cmd, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], c, r, w)
+
+      # Restore environment variables
+      unless envs.empty?
+        envs.each { |k, _| ENV[k] = nil }
+        old_envs.each { |k, v| ENV[k] = v }
+      end
+
       # Do not close 'w', strange things happen otherwise
       # (command protocol socket gets closed during decommission) 
       $stderr.reopen saved_stderr
