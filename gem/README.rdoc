@@ -41,8 +41,13 @@ to report issues.
 
   EM.run do
     EM.next_tick do
-      cmd = "ruby -e \"puts 'some stdout text'; $stderr.puts 'some stderr text'\; exit 99\""
-      RightScale.popen3(cmd, self, :on_read_stdout, :on_read_stderr, :on_exit)
+      command = "ruby -e \"puts 'some stdout text'; $stderr.puts 'some stderr text'\; exit 99\""
+      RightScale.popen3(:command        => command,
+                        :target         => self,
+                        :environment    => nil,
+                        :stdout_handler => :on_read_stdout,
+                        :stderr_handler => :on_read_stderr,
+                        :exit_handler   => :on_exit)
     end
     timer = EM::PeriodicTimer.new(0.1) do
       if @exit_status
@@ -90,7 +95,7 @@ The build can be tested using the RSpec gem. Create a link to the installed
 under Windows) and run the following command from the gem directory to execute
 the RightPopen tests:
 
-  spec spec/right_popen_spec.rb
+  rake spec
 
 
 == LICENSE

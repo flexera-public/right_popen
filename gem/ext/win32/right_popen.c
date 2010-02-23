@@ -60,6 +60,7 @@ static const DWORD CHILD_PROCESS_EXIT_WAIT_MSECS = 500;    // 0.5 secs
 
 static Open3ProcessData* win32_process_data_list = NULL;
 static DWORD win32_named_pipe_serial_number = 1;
+static HMODULE hUserEnvLib = NULL;
 
 // Summary:
 //  allocates a new Ruby I/O object.
@@ -219,6 +220,10 @@ static VALUE right_popen_close_io_array(VALUE vRubyIoObjectArray)
 //   bShowWindow
 //      true if process window is initially visible, false if process has no UI or is invisible
 //
+//   pszEnvironmentStrings
+//      enviroment strings in a double-nul terminated "str1\0str2\0...\0"
+//      block to give child process or NULL.
+//
 // Returns:
 //  true if successful, false otherwise (call GetLastError() for more information)
 static BOOL win32_create_process(char*     szCommand,
@@ -227,10 +232,12 @@ static BOOL win32_create_process(char*     szCommand,
                                  HANDLE    hStderr,
                                  HANDLE*   phProcess,
                                  rb_pid_t* pPid,
-                                 BOOL      bShowWindow)
+                                 BOOL      bShowWindow,
+                                 char*     pszEnvironmentStrings)
 {
     PROCESS_INFORMATION pi;
     STARTUPINFO si;
+    BOOL bResult = FALSE;
 
     ZeroMemory(&si, sizeof(STARTUPINFO));
 
@@ -246,7 +253,7 @@ static BOOL win32_create_process(char*     szCommand,
                       NULL,
                       TRUE,
                       0,
-                      NULL,
+                      pszEnvironmentStrings,
                       NULL,
                       &si,
                       &pi))
@@ -256,11 +263,11 @@ static BOOL win32_create_process(char*     szCommand,
 
         // Return process handle
         *phProcess = pi.hProcess;
-        *pPid = (rb_pid_t)pi.dwProcessId;
-        return TRUE;
+        *pPid      = (rb_pid_t)pi.dwProcessId;
+        bResult    = TRUE;
     }
 
-    return FALSE;
+    return bResult;
 }
 
 // Summary:
@@ -710,12 +717,16 @@ static VALUE ruby_create_io_object(rb_pid_t pid, int iFileMode, HANDLE hFile, BO
 //          false to read synchronously, true to read asynchronously. see
 //          also RightPopen::async_read() (defaults to Qfalse).
 //
+//      pszEnvironmentStrings
+//          enviroment strings in a double-nul terminated "str1\0str2\0...\0"
+//          block to give child process or NULL.
+//
 // Returns:
 //  a Ruby array containing [stdin write, stdout read, stderr read, pid]
 //
 // Throws:
 //  raises a Ruby RuntimeError on failure
-static VALUE win32_popen4(char* szCommand, int iMode, BOOL bShowWindow, BOOL bAsynchronousOutput)
+static VALUE win32_popen4(char* szCommand, int iMode, BOOL bShowWindow, BOOL bAsynchronousOutput, char* pszEnvironmentStrings)
 {
     VALUE vReturnArray = Qnil;
     HANDLE hProcess = NULL;
@@ -733,7 +744,8 @@ static VALUE win32_popen4(char* szCommand, int iMode, BOOL bShowWindow, BOOL bAs
                                   pData->childStderrPair.hWrite,
                                   &hProcess,
                                   &pid,
-                                  bShowWindow))
+                                  bShowWindow,
+                                  pszEnvironmentStrings))
     {
         DWORD dwLastError = GetLastError();
         win32_free_process_data(pData);
@@ -819,10 +831,12 @@ static VALUE right_popen_popen4(int argc, VALUE *argv, VALUE klass)
     VALUE vReturnArray = Qnil;
     VALUE vShowWindowFlag = Qfalse;
     VALUE vAsynchronousOutputFlag = Qfalse;
+    VALUE vEnvironmentStrings = Qnil;
     int iMode = 0;
     char* mode = "t";
+    char* pszEnvironmentStrings = NULL;
 
-    rb_scan_args(argc, argv, "13", &vCommand, &vMode, &vShowWindowFlag, &vAsynchronousOutputFlag);
+    rb_scan_args(argc, argv, "14", &vCommand, &vMode, &vShowWindowFlag, &vAsynchronousOutputFlag, &vEnvironmentStrings);
 
     if (!NIL_P(vMode))
     {
@@ -840,11 +854,16 @@ static VALUE right_popen_popen4(int argc, VALUE *argv, VALUE klass)
     {
         iMode = _O_BINARY;
     }
+    if (!NIL_P(vEnvironmentStrings))
+    {
+        pszEnvironmentStrings = StringValuePtr(vEnvironmentStrings);
+    }
 
     vReturnArray = win32_popen4(StringValuePtr(vCommand),
                                 iMode,
                                 Qfalse != vShowWindowFlag,
-                                Qfalse != vAsynchronousOutputFlag);
+                                Qfalse != vAsynchronousOutputFlag,
+                                pszEnvironmentStrings);
 
     // ensure handles are closed in block form.
     if (rb_block_given_p())
@@ -986,6 +1005,193 @@ static VALUE right_popen_async_read(VALUE vSelf, VALUE vRubyIoObject)
 }
 
 // Summary:
+//  scans the given nul-terminated block of nul-terminated Unicode strings to
+//  convert the block from Unicode to Multi-Byte and determine the correct
+//  length of the converted block. the converted block is then used to create
+//  a Ruby string value containing multiple nul-terminated strings. in Ruby,
+//  the block must be scanned again using index(0.chr, ...) logic.
+//
+// Returns:
+//  a Ruby string representing the environment block
+static VALUE win32_unicode_environment_block_to_ruby(const void* pvEnvironmentBlock)
+{
+    const WCHAR* pszStart = (const WCHAR*)pvEnvironmentBlock;
+    const WCHAR* pszEnvString = pszStart;
+
+    VALUE vResult = Qnil;
+
+    while (*pszEnvString != 0)
+    {
+        const int iEnvStringLength = wcslen(pszEnvString);
+
+        pszEnvString += iEnvStringLength + 1;
+    }
+
+    // convert from wide to multi-byte.
+    {
+        int iBlockLength = (int)(pszEnvString - pszStart);
+        DWORD dwBufferLength = WideCharToMultiByte(CP_ACP, 0, pszStart, iBlockLength, NULL, 0, NULL, NULL);
+	    char* pszBuffer = (char*)malloc(dwBufferLength + 2);
+
+        // FIX: the Ruby kernel appears to use the CP_ACP code page for
+        // in-memory conversion, but I still have not seen a definitive
+        // statement on which code page should be used.
+        ZeroMemory(pszBuffer, dwBufferLength + 2);
+        WideCharToMultiByte(CP_ACP, 0, pszStart, iBlockLength, pszBuffer, dwBufferLength + 2, NULL, NULL);
+        vResult = rb_str_new(pszBuffer, dwBufferLength + 1);
+        free(pszBuffer);
+        pszBuffer = NULL;
+    }
+
+    return vResult;
+}
+
+// Summary:
+//  scans the given nul-terminated block of nul-terminated Multi-Byte strings
+//  to determine the correct length of the converted block. the converted block
+//  is then used to create a Ruby string value containing multiple nul-
+//  terminated strings. in Ruby, the block must be scanned again using
+//  index(0.chr, ...) logic.
+//
+// Returns:
+//  a Ruby string representing the environment block
+static VALUE win32_multibyte_environment_block_to_ruby(const void* pvEnvironmentBlock)
+{
+    const char* pszStart = (const char*)pvEnvironmentBlock;
+    const char* pszEnvString = pszStart;
+
+    while (*pszEnvString != 0)
+    {
+        const int iEnvStringLength = strlen(pszEnvString);
+
+        pszEnvString += iEnvStringLength + 1;
+    }
+
+    // convert from wide to multi-byte.
+    {
+        int iBlockLength = (int)(pszEnvString - pszStart);
+
+        return rb_str_new(pszStart, iBlockLength + 1);
+    }
+}
+
+// Summary:
+//  gets the environment strings from the registry for the current thread/process user.
+//
+// Returns:
+//  nul-terminated block of nul-terminated environment strings as a Ruby string value.
+static VALUE right_popen_get_current_user_environment(VALUE vSelf)
+{
+    typedef BOOL (STDMETHODCALLTYPE FAR * LPFN_CREATEENVIRONMENTBLOCK)(LPVOID* lpEnvironment, HANDLE hToken, BOOL bInherit);
+    typedef BOOL (STDMETHODCALLTYPE FAR * LPFN_DESTROYENVIRONMENTBLOCK)(LPVOID lpEnvironment);
+
+    HANDLE hToken = NULL;
+
+    // dynamically load "userenv.dll" once (because the MSVC 6.0 compiler
+    // doesn't have the .h or .lib for it).
+    if (NULL == hUserEnvLib)
+    {
+        // note we will intentionally leave library loaded for efficiency
+        // reasons even though it is proper to call FreeLibrary().
+        hUserEnvLib = LoadLibrary("userenv.dll");
+        if (NULL == hUserEnvLib)
+        {
+            rb_raise(rb_eRuntimeError, "LoadLibrary() failed: %s", win32_error_description(GetLastError()));
+        }
+    }
+
+    // get the calling thread's access token.
+    if (FALSE == OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &hToken))
+    {
+        switch (GetLastError())
+        {
+        case ERROR_NO_TOKEN:
+            // retry against process token if no thread token exists.
+            if (FALSE == OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+            {
+                rb_raise(rb_eRuntimeError, "OpenProcessToken() failed: %s", win32_error_description(GetLastError()));
+            }
+            break;
+        default:
+            rb_raise(rb_eRuntimeError, "OpenThreadToken() failed: %s", win32_error_description(GetLastError()));
+        }
+    }
+
+    // get user's environment (from registry) without inheriting from the
+    // current process environment.
+    {
+        LPVOID lpEnvironment = NULL;
+        BOOL bResult = FALSE;
+        {
+            LPFN_CREATEENVIRONMENTBLOCK lpfnCreateEnvironmentBlock = (LPFN_CREATEENVIRONMENTBLOCK)GetProcAddress(hUserEnvLib, "CreateEnvironmentBlock");
+
+            if (NULL != lpfnCreateEnvironmentBlock)
+            {
+                bResult = lpfnCreateEnvironmentBlock(&lpEnvironment, hToken, FALSE);
+            }
+        }
+
+        // check result.
+        {
+            DWORD dwLastError = GetLastError();
+
+            CloseHandle(hToken);
+            hToken = NULL;
+            SetLastError(dwLastError);
+            if (FALSE == bResult || NULL == lpEnvironment)
+            {
+                rb_raise(rb_eRuntimeError, "OpenThreadToken() failed: %s", win32_error_description(GetLastError()));
+            }
+        }
+
+        // merge environment.
+        //
+        // note that there is only a unicode form of this API call (instead of
+        // the usual _A and _W pair) and that the environment strings appear to
+        // always be Unicode (which the docs only hint at indirectly).
+        {
+            VALUE value = win32_unicode_environment_block_to_ruby(lpEnvironment);
+            LPFN_DESTROYENVIRONMENTBLOCK lpfnDestroyEnvironmentBlock = (LPFN_DESTROYENVIRONMENTBLOCK)GetProcAddress(hUserEnvLib, "DestroyEnvironmentBlock");
+
+            if (NULL != lpfnDestroyEnvironmentBlock)
+            {
+                lpfnDestroyEnvironmentBlock(lpEnvironment);
+                lpEnvironment = NULL;
+            }
+            CloseHandle(hToken);
+            hToken = NULL;
+
+            return value;
+        }
+    }
+}
+
+// Summary:
+//  gets the environment strings for the current process.
+//
+// Returns:
+//  nul-terminated block of nul-terminated environment strings as a Ruby string value.
+static VALUE right_popen_get_process_environment(VALUE vSelf)
+{
+    char* lpEnvironment = GetEnvironmentStringsA();
+
+    if (NULL == lpEnvironment)
+    {
+        rb_raise(rb_eRuntimeError, "GetEnvironmentStringsA() failed: %s", win32_error_description(GetLastError()));
+    }
+
+    // create a Ruby string from block.
+    {
+        VALUE value = win32_multibyte_environment_block_to_ruby(lpEnvironment);
+
+        FreeEnvironmentStrings(lpEnvironment);
+        lpEnvironment = NULL;
+
+        return value;
+    }
+}
+
+// Summary:
 //  'RightPopen' module entry point
 void Init_right_popen()
 {
@@ -993,4 +1199,6 @@ void Init_right_popen()
 
     rb_define_module_function(vModule, "popen4", (VALUE(*)(ANYARGS))right_popen_popen4, -1);
     rb_define_module_function(vModule, "async_read", (VALUE(*)(ANYARGS))right_popen_async_read, 1);
+    rb_define_module_function(vModule, "get_current_user_environment", (VALUE(*)(ANYARGS))right_popen_get_current_user_environment, 0);
+    rb_define_module_function(vModule, "get_process_environment", (VALUE(*)(ANYARGS))right_popen_get_process_environment, 0);
 }

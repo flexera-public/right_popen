@@ -12,6 +12,10 @@ LARGE_OUTPUT_COUNTER = 1000
 # bump up count for most exhaustive leak detection.
 REPEAT_TEST_COUNTER = 256
 
+def is_windows?
+  return RUBY_PLATFORM =~ /mswin/
+end
+
 describe 'RightScale::popen3' do
 
   module RightPopenSpec
@@ -189,6 +193,18 @@ describe 'RightScale::popen3' do
     runner.output_text.should match(/^__test__=42$/)
     ENV.each { |k, v| old_envs[k].should == v }
     old_envs.each { |k, v| ENV[k].should == v }
+  end
+
+  if is_windows?
+    # FIX: this behavior is currently specific to Windows but should probably be
+    # implemented for Linux.
+    it 'should merge the PATH variable instead of overriding it' do
+      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+      runner = RightPopenSpec::Runner.new
+      runner.run_right_popen(command, 'PATH' => "c:/bogus\\bin")
+      runner.status.exitstatus.should == 0
+      runner.output_text.should include('PATH=c:\\bogus\\bin;')
+    end
   end
 
   it 'should run repeatedly without leaking resources' do

@@ -1,14 +1,16 @@
 require 'rubygems'
 
-spec = Gem::Specification.new do |spec|
-  is_windows = RUBY_PLATFORM =~ /mswin/
+def is_windows?
+  return RUBY_PLATFORM =~ /mswin/
+end
 
+spec = Gem::Specification.new do |spec|
   spec.name      = 'right_popen'
-  spec.version   = '1.0.4'
+  spec.version   = '1.0.5'
   spec.authors   = ['Scott Messier', 'Raphael Simon']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
-  if is_windows
+  if is_windows?
     spec.platform = 'x86-mswin32-60'
   else
     spec.platform  = Gem::Platform::RUBY
@@ -27,7 +29,7 @@ of its internal mechanisms. The Linux implementation is valid for any Linux
 platform but there is also a native implementation for Windows platforms.
 EOF
 
-  if is_windows
+  if is_windows?
     extension_dir = "ext,"
   else
     extension_dir = ""
@@ -38,7 +40,7 @@ EOF
     item.include?("Makefile") || item.include?(".obj") || item.include?(".pdb") || item.include?(".def") || item.include?(".exp") || item.include?(".lib")
   end
   candidates = candidates.delete_if do |item|
-    if is_windows
+    if is_windows?
       item.include?("/linux/")
     else
       item.include?("/win32/")
@@ -46,9 +48,13 @@ EOF
   end
   spec.files = candidates.sort!
 
-  # Current implementation supports > 0.12.8
+  # Current implementation supports >= 0.12.8
   spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.8"])
-  if is_windows
+  if is_windows?
+    # Windows implementation currently depends on deprecated behavior from
+    # 0.12.8, but we also need to support the 0.12.8.1 patch version. the Linux
+    # side is free to use 0.12.10+
+    spec.add_runtime_dependency(%q<eventmachine>, ["< 0.12.9"])
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
   end
 end
