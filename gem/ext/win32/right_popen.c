@@ -1144,7 +1144,7 @@ static VALUE right_popen_get_current_user_environment(VALUE vSelf)
             }
         }
 
-        // merge environment.
+        // convert environment block to a Ruby string.
         //
         // note that there is only a unicode form of this API call (instead of
         // the usual _A and _W pair) and that the environment strings appear to
@@ -1163,6 +1163,268 @@ static VALUE right_popen_get_current_user_environment(VALUE vSelf)
 
             return value;
         }
+    }
+}
+
+// Summary:
+//  grows the environment block as needed.
+//
+// Parameters:
+//   ppEnvironmentBlock:
+//      address of environment block buffer or NULL, receives reallocated buffer if necessary.
+//
+//   pdwBlockLength:
+//      address of current block length or zero, receives updated block length.
+//
+//   dwBlockOffset:
+//      current block offset.
+//
+//   dwNeededLength:
+//      needed allocation length not including nul terminator(s)
+static void win32_grow_environment_block(LPWSTR* ppEnvironmentBlock, DWORD* pdwBlockLength, DWORD dwBlockOffset, DWORD dwNeededLength)
+{
+    DWORD dwOldLength = *pdwBlockLength;
+    DWORD dwTerminatedLength = dwBlockOffset + dwNeededLength + 2;    // need two nuls after last string
+
+    if (dwOldLength < dwTerminatedLength)
+    {
+        // generally double length to degrade grow frequency.
+        DWORD dwNewLength = max(dwOldLength * 2, dwTerminatedLength);
+
+        dwNewLength = max(dwNewLength, 512);
+
+        // reallocate.
+        {
+            WCHAR* pOldBlock = *ppEnvironmentBlock;
+            WCHAR* pNewBlock = (WCHAR*)malloc(dwNewLength * sizeof(WCHAR));
+
+            if (NULL != pOldBlock)
+            {
+                memcpy(pNewBlock, pOldBlock, dwOldLength * sizeof(WCHAR));
+            }
+            ZeroMemory(pNewBlock + dwOldLength, (dwNewLength - dwOldLength) * sizeof(WCHAR));
+            if (NULL != pOldBlock)
+            {
+                free(pOldBlock);
+                pOldBlock = NULL;
+            }
+            *ppEnvironmentBlock = pNewBlock;
+            *pdwBlockLength = dwNewLength;
+        }
+    }
+}
+
+// Summary:
+//  reallocates the buffer needed to contain the given name/value pair and
+//  copies the name/value pair in expected format to the end of the
+//  environment block.
+//
+// Parameters:
+//   pValueName:
+//      nul-terminated value name
+//
+//   dwValueNameLength:
+//      length of value name not including nul terminator
+//
+//   pValueData:
+//      nul-terminated string or expand-string style value data
+//
+//   dwValueDataLength:
+//      length of value data not including nul terminator
+//
+//   ppEnvironmentBlock:
+//      result buffer to receive all name/value pairs or NULL to measure
+//
+//   pdwBlockLength:
+//      address of current buffer length or zero, receives updated length
+//
+//   pdwBlockOffset:
+//      address of current buffer offset or zero, receives updated offset
+static void win32_append_to_environment_block(LPCWSTR pValueName,
+                                              DWORD   dwValueNameLength,
+                                              LPCWSTR pValueData,
+                                              DWORD   dwValueDataLength,
+                                              LPWSTR* ppEnvironmentBlock,
+                                              DWORD*  pdwBlockLength,
+                                              DWORD*  pdwBlockOffset)
+{
+    // grow, if necessary.
+    DWORD dwNeededLength = dwValueNameLength + 1 + dwValueDataLength;
+
+    win32_grow_environment_block(ppEnvironmentBlock, pdwBlockLength, *pdwBlockOffset, dwNeededLength);
+
+    // copy name/value pair using "<value name>=<value data>\0" format.
+    {
+        DWORD dwBlockOffset = *pdwBlockOffset;
+        LPWSTR pszBuffer = *ppEnvironmentBlock + dwBlockOffset;
+
+        memcpy(pszBuffer, pValueName, dwValueNameLength * sizeof(WCHAR));
+        pszBuffer += dwValueNameLength;
+        *pszBuffer++ = '=';
+        memcpy(pszBuffer, pValueData, dwValueDataLength * sizeof(WCHAR));
+        pszBuffer += dwValueDataLength;
+        *pszBuffer = 0;
+    }
+
+    // update offset.
+    *pdwBlockOffset += dwNeededLength + 1;
+}
+
+// Summary:
+//  gets the environment strings from the registry for the machine.
+//
+// Returns:
+//  nul-terminated block of nul-terminated environment strings as a Ruby string value.
+static VALUE right_popen_get_machine_environment(VALUE vSelf)
+{
+    // open key.
+    HKEY hKey = NULL;
+    LPWSTR pEnvironmentBlock = NULL;
+    DWORD dwValueCount = 0;
+    DWORD dwMaxValueNameLength = 0;
+    DWORD dwMaxValueDataSizeBytes = 0;
+    DWORD dwResult = RegOpenKeyExW(HKEY_LOCAL_MACHINE, 
+                                   L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+                                   0,
+                                   KEY_READ,
+                                   &hKey);
+    if (ERROR_SUCCESS != dwResult)
+    {
+        rb_raise(rb_eRuntimeError, "RegOpenKeyExW() failed: %s", win32_error_description(dwResult));
+    }
+
+    // query key info.
+    dwResult = RegQueryInfoKeyW(hKey,                     // key handle 
+                                NULL,                     // buffer for class name 
+                                NULL,                     // size of class string 
+                                NULL,                     // reserved 
+                                NULL,                     // number of subkeys 
+                                NULL,                     // longest subkey size 
+                                NULL,                     // longest class string 
+                                &dwValueCount,            // number of values for this key 
+                                &dwMaxValueNameLength,    // longest value name 
+                                &dwMaxValueDataSizeBytes, // longest value data 
+                                NULL,                     // security descriptor 
+                                NULL);                    // last write time 
+    if (ERROR_SUCCESS != dwResult)
+    {
+        RegCloseKey(hKey);
+        rb_raise(rb_eRuntimeError, "RegQueryInfoKeyW() failed: %s", win32_error_description(dwResult));
+    }
+
+    // enumerate values and create result block.
+    {
+        LPWSTR pszValueName = (WCHAR*)malloc((dwMaxValueNameLength + 1) * sizeof(WCHAR));
+        BYTE* pValueData = (BYTE*)malloc(dwMaxValueDataSizeBytes);
+
+        ZeroMemory(pszValueName, (dwMaxValueNameLength + 1) * sizeof(WCHAR));
+        ZeroMemory(pValueData, dwMaxValueDataSizeBytes);
+        {
+            // enumerate values.
+            //
+            // note that there is nothing to prevent the data changing while
+            // the key is open for reading; we need to be cautious and not
+            // overrun the queried data buffer size in the rare case that the
+            // max data increases in size.
+            DWORD dwBlockLength = 0;
+            DWORD dwBlockOffset = 0;
+            DWORD dwValueIndex = 0;
+
+            for (; dwValueIndex < dwValueCount; ++dwValueIndex)
+            {
+                DWORD dwValueNameLength = dwMaxValueNameLength + 1;
+                DWORD dwValueDataSizeBytes = dwMaxValueDataSizeBytes;
+                DWORD dwValueType = REG_NONE;
+
+                dwResult = RegEnumValueW(hKey,
+                                         dwValueIndex,
+                                         pszValueName,
+                                         &dwValueNameLength,
+                                         NULL,
+                                         &dwValueType,
+                                         pValueData,
+                                         &dwValueDataSizeBytes);
+
+                // ignore any failures but continue on to next value.
+                if (ERROR_SUCCESS == dwResult)
+                {
+                    // only expecting string and expand string values; ignore anything else.
+                    switch (dwValueType)
+                    {
+                    case REG_EXPAND_SZ:
+                    case REG_SZ:
+                        {
+                            // byte size of Unicode string value must be even and include nul terminator.
+                            if (0 == (dwValueDataSizeBytes % sizeof(WCHAR)) && dwValueDataSizeBytes >= sizeof(WCHAR))
+                            {
+                                LPWSTR pszValueData = (LPWSTR)pValueData;
+                                DWORD dwValueDataLength = (dwValueDataSizeBytes / sizeof(WCHAR)) - 1;
+
+                                if (0 == pszValueData[dwValueDataLength])
+                                {
+                                    // need to expand (pseudo) environment variables for expand string values.
+                                    if (REG_EXPAND_SZ == dwValueType)
+                                    {
+                                        DWORD dwExpandedDataLength = ExpandEnvironmentStringsW(pszValueData, NULL, 0);
+                                        LPWSTR pszExpandedData = (WCHAR*)malloc(dwExpandedDataLength * sizeof(WCHAR));
+
+                                        ZeroMemory(pszExpandedData, dwExpandedDataLength * sizeof(WCHAR));
+                                        if (dwExpandedDataLength == ExpandEnvironmentStringsW(pszValueData, pszExpandedData, dwExpandedDataLength))
+                                        {
+                                            win32_append_to_environment_block(pszValueName,
+                                                                              dwValueNameLength,
+                                                                              pszExpandedData,
+                                                                              dwExpandedDataLength - 1,
+                                                                              &pEnvironmentBlock,
+                                                                              &dwBlockLength,
+                                                                              &dwBlockOffset);
+                                        }
+                                        free(pszExpandedData);
+                                        pszExpandedData = NULL;
+                                    }
+                                    else
+                                    {
+                                        win32_append_to_environment_block(pszValueName,
+                                                                          dwValueNameLength,
+                                                                          pszValueData,
+                                                                          dwValueDataLength,
+                                                                          &pEnvironmentBlock,
+                                                                          &dwBlockLength,
+                                                                          &dwBlockOffset);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // handle corner case of no (valid) machine environment values.
+            if (NULL == pEnvironmentBlock)
+            {
+                win32_grow_environment_block(&pEnvironmentBlock, &dwBlockLength, dwBlockOffset, 0);
+            }
+        }
+
+        // free temporary buffers.
+        free(pszValueName);
+        pszValueName = NULL;
+        free(pValueData);
+        pValueData = NULL;
+    }
+
+    // close.
+    RegCloseKey(hKey);
+    hKey = NULL;
+
+    // convert environment block to a Ruby string.
+    {
+        VALUE value = win32_unicode_environment_block_to_ruby(pEnvironmentBlock);
+
+        free(pEnvironmentBlock);
+        pEnvironmentBlock = NULL;
+
+        return value;
     }
 }
 
@@ -1200,5 +1462,6 @@ void Init_right_popen()
     rb_define_module_function(vModule, "popen4", (VALUE(*)(ANYARGS))right_popen_popen4, -1);
     rb_define_module_function(vModule, "async_read", (VALUE(*)(ANYARGS))right_popen_async_read, 1);
     rb_define_module_function(vModule, "get_current_user_environment", (VALUE(*)(ANYARGS))right_popen_get_current_user_environment, 0);
+    rb_define_module_function(vModule, "get_machine_environment", (VALUE(*)(ANYARGS))right_popen_get_machine_environment, 0);
     rb_define_module_function(vModule, "get_process_environment", (VALUE(*)(ANYARGS))right_popen_get_process_environment, 0);
 }

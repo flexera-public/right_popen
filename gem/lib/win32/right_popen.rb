@@ -265,9 +265,13 @@ module RightScale
     # merged string block
     def self.merge_environment(environment_hash)
       current_user_environment_hash = get_current_user_environment
+      machine_environment_hash = get_machine_environment
       result_environment_hash = get_process_environment
 
-      # user environment from registry supercedes process.
+      # machine from registry supercedes process.
+      merge_environment2(machine_environment_hash, result_environment_hash)
+
+      # user environment from registry supercedes machine and process.
       merge_environment2(current_user_environment_hash, result_environment_hash)
 
       # caller's environment supercedes all.
@@ -347,15 +351,24 @@ module RightScale
     end
 
     # Queries the environment strings from the current thread/process user's
-    # environment (which is stored in the registry on Windows as a combination of
-    # system and user-specific environment variables). The resulting hash
-    # represents any variables set for the persisted user context but any set
-    # dynamically in the current process context.
+    # environment. The resulting hash represents any variables set for the
+    # persisted user context but any set dynamically in the current process
+    # context.
     #
     # === Returns
     # environment_hash(Hash):: hash of environment key (String) to value (String).
     def self.get_current_user_environment
       environment_strings = RightPopen.get_current_user_environment
+
+      return string_block_to_environment_hash(environment_strings)
+    end
+
+    # Queries the environment strings from the machine's environment.
+    #
+    # === Returns
+    # environment_hash(Hash):: hash of environment key (String) to value (String).
+    def self.get_machine_environment
+      environment_strings = RightPopen.get_machine_environment
 
       return string_block_to_environment_hash(environment_strings)
     end
