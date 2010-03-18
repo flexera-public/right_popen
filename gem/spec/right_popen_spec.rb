@@ -205,6 +205,14 @@ describe 'RightScale::popen3' do
       runner.status.exitstatus.should == 0
       runner.output_text.should include('PATH=c:\\bogus\\bin;')
     end
+  else
+    it 'should allow running bash command lines starting with a built-in command' do
+      command = "for i in 1 2 3 4 5; do echo $i;done"
+      runner = RightPopenSpec::Runner.new
+      runner.run_right_popen(command)
+      runner.status.exitstatus.should == 0
+      runner.output_text.should == "1\n2\n3\n4\n5\n"
+    end
   end
 
   it 'should run repeatedly without leaking resources' do

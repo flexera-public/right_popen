@@ -34,16 +34,18 @@ module RightScale
   module StdOutHandler
 
     # === Parameters
-    # target(Object):: Object defining handler methods to be called.
-    # stdout_handler(String):: Token for stdout handler method name.
-    # exit_handler(String):: Token for exit handler method name.
+    # options[:target](Object):: Object defining handler methods to be called.
+    # options[:stdout_handler(String):: Token for stdout handler method name.
+    # options[:exit_handler(String):: Token for exit handler method name.
+    # options[:exec_file](String):: Path to executed file
     # stderr_eventable(Connector):: EM object representing stderr handler.
     # read_fd(IO):: Standard output read file descriptor.
     # write_fd(IO):: Standard output write file descriptor.
-    def initialize(target, stdout_handler, exit_handler, stderr_eventable, read_fd, write_fd)
-      @target = target
-      @stdout_handler = stdout_handler
-      @exit_handler = exit_handler
+    def initialize(options, stderr_eventable, read_fd, write_fd)
+      @target = options[:target]
+      @stdout_handler = options[:stdout_handler]
+      @exit_handler = options[:exit_handler]
+      @exec_file = options[:exec_file]
       @stderr_eventable = stderr_eventable
       # Just so they don't get GCed before the process goes away
       @read_fd = read_fd
@@ -59,6 +61,7 @@ module RightScale
     def unbind
       # We force the attached stderr handler to go away so that
       # we don't end up with a broken pipe
+      File.delete(@exec_file) if File.file?(@exec_file)
       @stderr_eventable.force_detach if @stderr_eventable
       @target.method(@exit_handler).call(get_status) if @exit_handler
     end
@@ -99,9 +102,19 @@ module RightScale
   # Forks process to run given command asynchronously, hooking all three
   # standard streams of the child process.
   #
+  # === Parameters
+  # options[:temp_dir]:: Path to temporary directory where executable files are
+  #                      created, default to /tmp if not specified
+  #
   # See RightScale.popen3
   def self.popen3_imp(options)
-    cmd = options[:command].dup
+    # First write command to file so that it's possible to use popen3 with
+    # a bash command line (e.g. 'for i in 1 2 3 4 5; ...')
+    temp_dir = options[:temp_dir] || '/tmp'
+    exec_file = File.join(temp_dir, Time.new.to_i.to_s)
+    options[:exec_file] = exec_file
+    File.open(exec_file, 'w') { |f| f.puts options[:command] }
+    File.chmod(0700, exec_file)
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
       saved_stderr = $stderr.dup
@@ -120,7 +133,7 @@ module RightScale
       end
 
       # Launch child process
-      EM.popen(cmd, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], c, r, w)
+      EM.popen(exec_file, StdOutHandler, options, c, r, w)
 
       # Restore environment variables
       unless envs.empty?
