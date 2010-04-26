@@ -48,13 +48,12 @@ EOF
   end
   spec.files = candidates.sort!
 
-  # Current implementation supports >= 0.12.8
-  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.8"])
+  # Current implementation supports >= 0.12.10
+  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.10"])
   if is_windows?
     # Windows implementation currently depends on deprecated behavior from
     # 0.12.8, but we also need to support the 0.12.8.1 patch version. the Linux
     # side is free to use 0.12.10+
-    spec.add_runtime_dependency(%q<eventmachine>, ["< 0.12.9"])
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
   end
 end
