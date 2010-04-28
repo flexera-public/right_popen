@@ -40,7 +40,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				AdditionalLibraryDirectories="c:\ruby\lib"
-				ModuleDefinitionFile="gem\ext\right_popen-i386-mswin32.def"
+				ModuleDefinitionFile="..\ext\right_popen-i386-mswin32.def"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile="bin_71\Debug/right_popen-i386-mswin32.pdb"
 				ImportLibrary="bin_71\Debug/right_popen-i386-mswin32.lib"
@@ -106,7 +106,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				AdditionalLibraryDirectories="c:\ruby\lib"
-				ModuleDefinitionFile="gem\ext\right_popen-i386-mswin32.def"
+				ModuleDefinitionFile="..\ext\right_popen-i386-mswin32.def"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile="bin_71\Release/right_popen-i386-mswin32.pdb"
 				ImportLibrary="bin_71\Release/right_popen-i386-mswin32.lib"
@@ -148,27 +148,27 @@
 			Name="Source Files"
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat">
 			<File
-				RelativePath="gem\ext\win32\right_popen.c">
+				RelativePath="..\ext\win32\right_popen.c">
 			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl">
 			<File
-				RelativePath="gem\ext\win32\right_popen.h">
+				RelativePath="..\ext\win32\right_popen.h">
 			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
 			Filter="ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe">
 			<File
-				RelativePath="gem\Rakefile">
+				RelativePath="..\Rakefile">
 			</File>
 			<File
-				RelativePath="gem\Readme">
+				RelativePath="..\Readme">
 			</File>
 			<File
-				RelativePath="gem\right_popen.gemspec">
+				RelativePath="..\right_popen.gemspec">
 			</File>
 		</Filter>
 	</Files>

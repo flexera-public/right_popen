@@ -59,7 +59,7 @@ module RightScale
 
     # Callback from EM to unbind.
     def unbind
-      # We force the watched stderr handler to go away so that
+      # We force the attached stderr handler to go away so that
       # we don't end up with a broken pipe
       File.delete(@exec_file) if File.file?(@exec_file)
       @stderr_eventable.force_detach if @stderr_eventable
@@ -121,7 +121,7 @@ module RightScale
       r, w = Socket::pair(Socket::AF_LOCAL, Socket::SOCK_STREAM, 0)#IO::pipe
 
       $stderr.reopen w
-      c = EM.watch(r, StdErrHandler, options[:target], options[:stderr_handler], r) if options[:stderr_handler]
+      c = EM.attach(r, StdErrHandler, options[:target], options[:stderr_handler], r) if options[:stderr_handler]
 
       # Setup environment for child process
       envs = {}

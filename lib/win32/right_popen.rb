@@ -23,9 +23,9 @@
 
 require 'rubygems'
 begin
-  gem 'eventmachine', '=0.12.8.1'  # patched version for Windows-only socket close fix
+  gem 'eventmachine', '=0.12.10.1'  # patched version for Windows-only socket close fix
 rescue Gem::LoadError
-  gem 'eventmachine', '=0.12.8'  # notify_readable is deprecated, so currently cannot use >=0.12.10 in Windows gem
+  gem 'eventmachine', '=0.12.10'  
 end
 require 'eventmachine'
 require 'win32/process'
@@ -122,7 +122,7 @@ module RightScale
 
     # Callback from EM to unbind.
     def unbind
-      # We force the stderr watched handler to go away so that
+    # We force the stderr watched handler to go away so that
       # we don't end up with a broken pipe
       @stderr_eventable.force_detach if @stderr_eventable
       @target.method(@exit_handler).call(get_status) if @exit_handler
@@ -195,11 +195,11 @@ module RightScale
     # close input immediately.
     stream_in.close
 
-    # watch handlers to event machine and let it monitor incoming data. the
+    # attach handlers to event machine and let it monitor incoming data. the
     # streams aren't used directly by the connectors except that they are closed
     # on unbind.
-    stderr_eventable = EM.watch(stream_err, StdErrHandler, options[:target], options[:stderr_handler], stream_err) if options[:stderr_handler]
-    EM.watch(stream_out, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], stderr_eventable, stream_out, pid)
+    stderr_eventable = EM.watch(stream_err, StdErrHandler, options[:target], options[:stderr_handler], stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
+    EM.watch(stream_out, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
 
     # note that control returns to the caller, but the launched cmd continues
     # running and sends output to the handlers. the caller is not responsible

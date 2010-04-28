@@ -33,6 +33,7 @@ describe 'RightScale::popen3' do
       attr_reader :output_text, :error_text, :status
 
       def do_right_popen(command, env=nil)
+        @timeout = EM::Timer.new(10) { puts "** Failed: Timeout"; EM.stop }
         @output_text = ''
         @error_text  = ''
         @status      = nil
@@ -45,45 +46,16 @@ describe 'RightScale::popen3' do
       end
 
       def run_right_popen(command, env=nil, count = 1)
-        puts "#{count}>" if count > 1
-        last_iteration = 0
-        EM.next_tick do
-          do_right_popen(command, env)
-        end
-        EM.run do
-          timer = EM::PeriodicTimer.new(0.05) do
-            begin
-              if @done || @last_exception
-                last_iteration = last_iteration + 1
-                if @last_exception.nil? && last_iteration < count
-                  @done = false
-                  EM.next_tick do
-                    if count > 1
-                      print '+'
-                      STDOUT.flush
-                    end
-                    do_right_popen(command, env)
-                  end
-                else
-                  puts "<" if count > 1
-                  timer.cancel
-                  EM.stop
-                end
-              end
-            rescue Exception => e
-              @last_exception = e
-              timer.cancel
-              EM.stop
-            end
-          end
-        end
-        if @last_exception
-          if count > 1
-            message = "<#{last_iteration + 1}\n#{last_exception.message}"
-          else
-            message = last_exception.message
-          end
-          raise @last_exception.class, "#{message}\n#{@last_exception.backtrace.join("\n")}"
+        begin
+          @command = command
+          @env = env
+          @last_iteration = 0
+          @count = count
+          puts "#{count}>" if count > 1
+          EM.run { EM.next_tick { do_right_popen(command, env) } }
+        rescue Exception => e
+          puts "** Failed: #{e.message} FROM\n#{e.backtrace.join("\n")}"
+          raise e
         end
       end
 
@@ -96,8 +68,19 @@ describe 'RightScale::popen3' do
       end
 
       def on_exit(status)
+        @last_iteration += 1
+        @timeout.cancel if @timeout
+        if @last_iteration < @count
+          EM.next_tick do
+            print '+'
+            STDOUT.flush
+            do_right_popen(@command, @env)
+          end
+        else
+          puts "<" if @count > 1
+          EM.stop
+        end
         @status = status
-        @done = true
       end
     end
 

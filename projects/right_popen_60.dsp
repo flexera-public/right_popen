@@ -96,11 +96,11 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE="gem\ext\right_popen-i386-mswin32.def"
+SOURCE="..\ext\right_popen-i386-mswin32.def"
 # End Source File
 # Begin Source File
 
-SOURCE=.\gem\ext\win32\right_popen.c
+SOURCE=..\ext\win32\right_popen.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -108,7 +108,7 @@ SOURCE=.\gem\ext\win32\right_popen.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\gem\ext\win32\right_popen.h
+SOURCE=..\ext\win32\right_popen.h
 # End Source File
 # End Group
 # Begin Group "Resource Files"
@@ -116,15 +116,15 @@ SOURCE=.\gem\ext\win32\right_popen.h
 # PROP Default_Filter "ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
 # Begin Source File
 
-SOURCE=gem\Rakefile
+SOURCE=..\Rakefile
 # End Source File
 # Begin Source File
 
-SOURCE=gem\README
+SOURCE=..\README
 # End Source File
 # Begin Source File
 
-SOURCE="gem\right_popen.gemspec"
+SOURCE="..\right_popen.gemspec"
 # End Source File
 # End Group
 # End Target

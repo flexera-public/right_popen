@@ -79,7 +79,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="c:\ruby\lib"
-				ModuleDefinitionFile="gem\ext\right_popen-i386-mswin32.def"
+				ModuleDefinitionFile="..\ext\right_popen-i386-mswin32.def"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="bin_90\Debug/right_popen-i386-mswin32.pdb"
 				RandomizedBaseAddress="1"
@@ -175,7 +175,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories="c:\ruby\lib"
-				ModuleDefinitionFile="gem\ext\right_popen-i386-mswin32.def"
+				ModuleDefinitionFile="..\ext\right_popen-i386-mswin32.def"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="bin_90\Release/right_popen-i386-mswin32.pdb"
 				RandomizedBaseAddress="1"
@@ -214,11 +214,11 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="gem\ext\right_popen-i386-mswin32.def"
+				RelativePath="..\ext\right_popen-i386-mswin32.def"
 				>
 			</File>
 			<File
-				RelativePath=".\gem\ext\win32\right_popen.c"
+				RelativePath="..\ext\win32\right_popen.c"
 				>
 			</File>
 		</Filter>
@@ -227,7 +227,7 @@
 			Filter="h;hpp;hxx;hm;inl"
 			>
 			<File
-				RelativePath=".\gem\ext\win32\right_popen.h"
+				RelativePath="..\ext\win32\right_popen.h"
 				>
 			</File>
 		</Filter>
@@ -236,15 +236,15 @@
 			Filter="ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
 			>
 			<File
-				RelativePath="gem\Rakefile"
+				RelativePath="..\Rakefile"
 				>
 			</File>
 			<File
-				RelativePath="gem\Readme"
+				RelativePath="..\Readme"
 				>
 			</File>
 			<File
-				RelativePath=".\gem\right_popen.gemspec"
+				RelativePath="..\right_popen.gemspec"
 				>
 			</File>
 		</Filter>
