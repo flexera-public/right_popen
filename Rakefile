@@ -9,12 +9,14 @@ include Config
 
 desc "Clean any build files for right_popen"
 task :clean do
-  if File.exists?('ext/Makefile')
-    Dir.chdir('ext') do
-      sh 'nmake distclean'
+  if RUBY_PLATFORM =~ /mswin/
+    if File.exists?('ext/Makefile')
+      Dir.chdir('ext') do
+        sh 'nmake distclean'
+      end
     end
+    rm 'lib/win32/right_popen.so' if File.file?('lib/win32/right_popen.so')
   end
-  rm 'lib/win32/right_popen.so' if File.file?('lib/win32/right_popen.so')
 end
 
 desc "Build right_popen (but don't install it)"
@@ -30,13 +32,13 @@ task :build => [:clean] do
 end
 
 desc "Build a binary gem"
-task :build_binary_gem => [:build] do
+task :gem => [:build] do
    Dir["*.gem"].each { |gem| rm gem }
    ruby 'right_popen.gemspec'
 end
 
 desc 'Install the right_popen library as a gem'
-task :install_gem => [:build_binary_gem] do
+task :install_gem => [:gem] do
    file = Dir["*.gem"].first
    sh "gem install #{file}"
 end
