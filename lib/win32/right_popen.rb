@@ -22,11 +22,6 @@
 #++
 
 require 'rubygems'
-begin
-  gem 'eventmachine', '=0.12.10.1'  # patched version for Windows-only socket close fix
-rescue Gem::LoadError
-  gem 'eventmachine', '=0.12.10'  
-end
 require 'eventmachine'
 require 'win32/process'
 
