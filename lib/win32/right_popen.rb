@@ -29,6 +29,29 @@ require File.join(File.dirname(__FILE__), 'right_popen.so')  # win32 native code
 
 module RightScale
 
+  # Eventmachine callback handler for stdin stream
+  module StdInHandler
+
+    # === Parameters
+    # options[:input](String):: Input to be streamed into child process stdin
+    # stream_in(IO):: Standard input stream.
+    def initialize(options, stream_in)
+      @stream_in = stream_in
+      @input = options[:input]
+    end
+
+    # Eventmachine callback asking for more to write
+    # Send input and close stream in
+    def notify_writable
+      if @input
+        send_data(@input)
+        @stream_in.close
+        @input = nil
+      end
+    end
+
+  end
+  
   # Provides an eventmachine callback handler for the stdout stream.
   module StdOutHandler
 
@@ -71,7 +94,6 @@ module RightScale
     end
 
     # === Parameters
-    # options[:input](String):: Input to be streamed into child process stdin
     # options[:target](Object):: Object defining handler methods to be called.
     # options[:stdout_handler](String):: Token for stdout handler method name.
     # options[:exit_handler](String):: Token for exit handler method name.
@@ -79,7 +101,6 @@ module RightScale
     # stream_out(IO):: Standard output stream.
     # pid(Integer):: Child process ID.
     def initialize(options, stderr_eventable, stream_out, pid)
-      @input = options[:input]
       @target = options[:target]
       @stdout_handler = options[:stdout_handler]
       @exit_handler = options[:exit_handler]
@@ -87,11 +108,6 @@ module RightScale
       @stream_out = stream_out
       @pid = pid
       @status = nil
-    end
-
-    # Send input to child process stdin
-    def post_init
-      send_data(@input) if @input
     end
 
     # Callback from EM to asynchronously read the stdout stream. Note that this
@@ -193,13 +209,14 @@ module RightScale
     stream_in, stream_out, stream_err, pid = RightPopen.popen4(options[:command], mode, show_window, asynchronous_output, environment_strings)
 
     # close input immediately.
-    stream_in.close
+    stream_in.close if options[:input].nil?
 
     # attach handlers to event machine and let it monitor incoming data. the
     # streams aren't used directly by the connectors except that they are closed
     # on unbind.
     stderr_eventable = EM.watch(stream_err, StdErrHandler, options, stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
     EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
+    EM.watch(stream_in, StdInHandler, options, stream_in) { |c| c.notify_writable = true } if options[:input]
 
     # note that control returns to the caller, but the launched cmd continues
     # running and sends output to the handlers. the caller is not responsible
