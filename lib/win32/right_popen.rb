@@ -71,20 +71,27 @@ module RightScale
     end
 
     # === Parameters
-    # target(Object):: Object defining handler methods to be called.
-    # stdout_handler(String):: Token for stdout handler method name.
-    # exit_handler(String):: Token for exit handler method name.
+    # options[:input](String):: Input to be streamed into child process stdin
+    # options[:target](Object):: Object defining handler methods to be called.
+    # options[:stdout_handler](String):: Token for stdout handler method name.
+    # options[:exit_handler](String):: Token for exit handler method name.
     # stderr_eventable(Connector):: EM object representing stderr handler.
     # stream_out(IO):: Standard output stream.
     # pid(Integer):: Child process ID.
-    def initialize(target, stdout_handler, exit_handler, stderr_eventable, stream_out, pid)
-      @target = target
-      @stdout_handler = stdout_handler
-      @exit_handler = exit_handler
+    def initialize(options, stderr_eventable, stream_out, pid)
+      @input = options[:input]
+      @target = options[:target]
+      @stdout_handler = options[:stdout_handler]
+      @exit_handler = options[:exit_handler]
       @stderr_eventable = stderr_eventable
       @stream_out = stream_out
       @pid = pid
       @status = nil
+    end
+
+    # Send input to child process stdin
+    def post_init
+      send_data(@input) if @input
     end
 
     # Callback from EM to asynchronously read the stdout stream. Note that this
@@ -129,14 +136,12 @@ module RightScale
   module StdErrHandler
 
     # === Parameters
-    # target(Object):: Object defining handler methods to be called.
-    #
-    # stderr_handler(String):: Token for stderr handler method name.
-    # 
+    # options[:target](Object):: Object defining handler methods to be called.
+    # options[:stderr_handler](Symbol):: Token for stderr handler method name.
     # stream_err(IO):: Standard error stream.
-    def initialize(target, stderr_handler, stream_err)
-      @target = target
-      @stderr_handler = stderr_handler
+    def initialize(options, stream_err)
+      @target = options[:target]
+      @stderr_handler = options[:stderr_handler]
       @stream_err = stream_err
       @unbound = false
     end
@@ -193,8 +198,8 @@ module RightScale
     # attach handlers to event machine and let it monitor incoming data. the
     # streams aren't used directly by the connectors except that they are closed
     # on unbind.
-    stderr_eventable = EM.watch(stream_err, StdErrHandler, options[:target], options[:stderr_handler], stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
-    EM.watch(stream_out, StdOutHandler, options[:target], options[:stdout_handler], options[:exit_handler], stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
+    stderr_eventable = EM.watch(stream_err, StdErrHandler, options, stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
+    EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
 
     # note that control returns to the caller, but the launched cmd continues
     # running and sends output to the handlers. the caller is not responsible

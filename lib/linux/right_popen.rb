@@ -34,6 +34,7 @@ module RightScale
   module StdOutHandler
 
     # === Parameters
+    # options[:input](String):: Input to be sent to child process stdin
     # options[:target](Object):: Object defining handler methods to be called.
     # options[:stdout_handler(String):: Token for stdout handler method name.
     # options[:exit_handler(String):: Token for exit handler method name.
@@ -42,6 +43,7 @@ module RightScale
     # read_fd(IO):: Standard output read file descriptor.
     # write_fd(IO):: Standard output write file descriptor.
     def initialize(options, stderr_eventable, read_fd, write_fd)
+      @input = options[:input]
       @target = options[:target]
       @stdout_handler = options[:stdout_handler]
       @exit_handler = options[:exit_handler]
@@ -50,6 +52,11 @@ module RightScale
       # Just so they don't get GCed before the process goes away
       @read_fd = read_fd
       @write_fd = write_fd
+    end
+
+    # Send input to child process stdin
+    def post_init
+      send_data(@input) if @input
     end
 
     # Callback from EM to receive data.

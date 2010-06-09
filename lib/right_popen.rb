@@ -47,6 +47,7 @@ module RightScale
   # === Parameters
   # options[:command](String):: Command to execute, including any arguments
   # options[:environment](Hash):: Hash of environment variables values keyed by name
+  # options[:input](String):: Input string that will get streamed into child's process stdin
   # options[:target](Object):: object defining handler methods to be called, optional (no handlers can be defined if not specified)
   # options[:stdout_handler](String):: Stdout handler method name, optional
   # options[:stderr_handler](String):: Stderr handler method name, optional

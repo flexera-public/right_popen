@@ -32,12 +32,13 @@ describe 'RightScale::popen3' do
 
       attr_reader :output_text, :error_text, :status
 
-      def do_right_popen(command, env=nil)
-        @timeout = EM::Timer.new(10) { puts "** Failed: Timeout"; EM.stop }
+      def do_right_popen(command, env=nil, input=nil)
+        @timeout = EM::Timer.new(2) { puts "\n** Failed to run #{command.inspect}: Timeout"; EM.stop }
         @output_text = ''
         @error_text  = ''
         @status      = nil
         RightScale.popen3(:command        => command, 
+                          :input          => input,
                           :target         => self, 
                           :environment    => env,
                           :stdout_handler => :on_read_stdout, 
@@ -45,16 +46,16 @@ describe 'RightScale::popen3' do
                           :exit_handler   => :on_exit)
       end
 
-      def run_right_popen(command, env=nil, count = 1)
+      def run_right_popen(command, env=nil, input=nil, count=1)
         begin
           @command = command
           @env = env
           @last_iteration = 0
           @count = count
           puts "#{count}>" if count > 1
-          EM.run { EM.next_tick { do_right_popen(command, env) } }
+          EM.run { EM.next_tick { do_right_popen(command, env, input) } }
         rescue Exception => e
-          puts "** Failed: #{e.message} FROM\n#{e.backtrace.join("\n")}"
+          puts "\n** Failed: #{e.message} FROM\n#{e.backtrace.join("\n")}"
           raise e
         end
       end
@@ -199,12 +200,22 @@ describe 'RightScale::popen3' do
   end
 
   it 'should run repeatedly without leaking resources' do
+    pending 'Set environment variable TEST_LEAK to enable' unless ENV['TEST_LEAK']
     command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
     runner = RightPopenSpec::Runner.new
-    runner.run_right_popen(command, nil, REPEAT_TEST_COUNTER)
+    runner.run_right_popen(command, nil, nil, REPEAT_TEST_COUNTER)
     runner.status.exitstatus.should == 0
     runner.output_text.should == STANDARD_MESSAGE + "\n"
     runner.error_text.should == ERROR_MESSAGE + "\n"
+  end
+
+  it 'should pass input to child process' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'increment.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command, nil, "42\n")
+    runner.status.exitstatus.should == 0
+    runner.output_text.should == "43\n"
+    runner.error_text.should be_empty
   end
 
 end
