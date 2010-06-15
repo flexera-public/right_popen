@@ -42,11 +42,13 @@ module RightScale
 
     # Eventmachine callback asking for more to write
     # Send input and close stream in
-    def notify_writable
+    def post_init
       if @input
         send_data(@input)
-        @stream_in.close
+        close_connection_after_writing
         @input = nil
+      else
+        close_connection
       end
     end
 
@@ -216,7 +218,7 @@ module RightScale
     # on unbind.
     stderr_eventable = EM.watch(stream_err, StdErrHandler, options, stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
     EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
-    EM.watch(stream_in, StdInHandler, options, stream_in) { |c| c.notify_writable = true } if options[:input]
+    EM.attach(stream_in, StdInHandler, options, stream_in) if options[:input]
 
     # note that control returns to the caller, but the launched cmd continues
     # running and sends output to the handlers. the caller is not responsible
