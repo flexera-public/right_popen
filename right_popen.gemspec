@@ -6,8 +6,8 @@ end
 
 spec = Gem::Specification.new do |spec|
   spec.name      = 'right_popen'
-  spec.version   = '1.0.9'
-  spec.authors   = ['Scott Messier', 'Raphael Simon']
+  spec.version   = '1.0.10'
+  spec.authors   = ['Scott Messier', 'Raphael Simon', 'Graham Hughes']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
   if is_windows?
