@@ -27,6 +27,7 @@
 
 require 'rubygems'
 require 'eventmachine'
+require 'tempfile'
 
 module RightScale
 
@@ -118,11 +119,11 @@ module RightScale
   def self.popen3_imp(options)
     # First write command to file so that it's possible to use popen3 with
     # a bash command line (e.g. 'for i in 1 2 3 4 5; ...')
-    temp_dir = options[:temp_dir] || '/tmp'
-    exec_file = File.join(temp_dir, Time.new.to_i.to_s)
-    options[:exec_file] = exec_file
-    File.open(exec_file, 'w') { |f| f.puts options[:command] }
-    File.chmod(0700, exec_file)
+    exec_file = Tempfile.new('exec', options[:temp_dir] || Dir.tmpdir)
+    options[:exec_file] = exec_file.path
+    exec_file.puts(options[:command])
+    exec_file.close
+    File.chmod(0700, exec_file.path)
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
       saved_stderr = $stderr.dup
@@ -141,7 +142,7 @@ module RightScale
       end
 
       # Launch child process
-      connection = EM.popen(exec_file, StdOutHandler, options, c, r, w)
+      connection = EM.popen(options[:exec_file], StdOutHandler, options, c, r, w)
       if options[:pid_handler]
         options[:target].method(options[:pid_handler]).call(EM.get_subprocess_pid(connection.signature))
       end
