@@ -53,7 +53,7 @@ module RightScale
     end
 
   end
-  
+
   # Provides an eventmachine callback handler for the stdout stream.
   module StdOutHandler
 
@@ -70,7 +70,7 @@ module RightScale
 
       # === Parameters
       # pid(Integer):: Process ID.
-      # 
+      #
       # exitstatus(Integer):: Process exit code
       def initialize(pid, exitstatus)
         @pid = pid
