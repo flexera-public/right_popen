@@ -166,17 +166,21 @@ describe 'RightScale::popen3' do
   end
 
   it 'should restore environment variables' do
-    ENV['__test__'] = '41'
-    old_envs = {}
-    ENV.each { |k, v| old_envs[k] = v }
-    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
-    runner = RightPopenSpec::Runner.new
-    runner.run_right_popen(command, :__test__ => '42')
-    runner.status.exitstatus.should == 0
-    runner.output_text.should match(/^__test__=42$/)
-    ENV.each { |k, v| old_envs[k].should == v }
-    old_envs.each { |k, v| ENV[k].should == v }
-    runner.pid.should > 0
+    begin
+      ENV['__test__'] = '41'
+      old_envs = {}
+      ENV.each { |k, v| old_envs[k] = v }
+      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+      runner = RightPopenSpec::Runner.new
+      runner.run_right_popen(command, :__test__ => '42')
+      runner.status.exitstatus.should == 0
+      runner.output_text.should match(/^__test__=42$/)
+      ENV.each { |k, v| old_envs[k].should == v }
+      old_envs.each { |k, v| ENV[k].should == v }
+      runner.pid.should > 0
+    ensure
+      ENV.delete('__test__')
+    end
   end
 
   if is_windows?
