@@ -49,6 +49,7 @@ module RightScale
   # options[:environment](Hash):: Hash of environment variables values keyed by name
   # options[:input](String):: Input string that will get streamed into child's process stdin
   # options[:target](Object):: object defining handler methods to be called, optional (no handlers can be defined if not specified)
+  # options[:pid_handler](String):: PID notification handler method name, optional
   # options[:stdout_handler](String):: Stdout handler method name, optional
   # options[:stderr_handler](String):: Stderr handler method name, optional
   # options[:exit_handler](String):: Exit handler method name, optional
@@ -58,7 +59,7 @@ module RightScale
   def self.popen3(options)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     raise "Missing command" unless options[:command]
-    raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler]
+    raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler] && !options[:pid_handler]
     RightScale.popen3_imp(options)
     true
   end

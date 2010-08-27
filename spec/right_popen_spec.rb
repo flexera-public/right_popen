@@ -31,18 +31,21 @@ describe 'RightScale::popen3' do
       end
 
       attr_reader :output_text, :error_text, :status
+      attr_accessor :pid
 
       def do_right_popen(command, env=nil, input=nil)
         @timeout = EM::Timer.new(2) { puts "\n** Failed to run #{command.inspect}: Timeout"; EM.stop }
         @output_text = ''
         @error_text  = ''
         @status      = nil
-        RightScale.popen3(:command        => command, 
+        @pid         = nil
+        RightScale.popen3(:command        => command,
                           :input          => input,
-                          :target         => self, 
+                          :target         => self,
                           :environment    => env,
-                          :stdout_handler => :on_read_stdout, 
-                          :stderr_handler => :on_read_stderr, 
+                          :stdout_handler => :on_read_stdout,
+                          :stderr_handler => :on_read_stderr,
+                          :pid_handler    => :on_pid,
                           :exit_handler   => :on_exit)
       end
 
@@ -66,6 +69,11 @@ describe 'RightScale::popen3' do
 
       def on_read_stderr(data)
         @error_text << data
+      end
+
+      def on_pid(pid)
+        raise "PID already set!" unless @pid.nil?
+        @pid = pid
       end
 
       def on_exit(status)
@@ -94,6 +102,7 @@ describe 'RightScale::popen3' do
     runner.status.exitstatus.should == 0
     runner.output_text.should == STANDARD_MESSAGE + "\n"
     runner.error_text.should == ERROR_MESSAGE + "\n"
+    runner.pid.should > 0
   end
 
   it 'should return the right status' do
@@ -103,6 +112,7 @@ describe 'RightScale::popen3' do
     runner.status.exitstatus.should == EXIT_STATUS
     runner.output_text.should == ''
     runner.error_text.should == ''
+    runner.pid.should > 0
   end
 
   it 'should preserve the integrity of stdout when stderr is unavailable' do
@@ -118,6 +128,7 @@ describe 'RightScale::popen3' do
     end
     runner.output_text.should == results
     runner.error_text.should == ''
+    runner.pid.should > 0
   end
 
   it 'should preserve the integrity of stderr when stdout is unavailable' do
@@ -133,6 +144,7 @@ describe 'RightScale::popen3' do
     end
     runner.error_text.should == results
     runner.output_text.should == ''
+    runner.pid.should > 0
   end
 
   it 'should preserve the integrity of stdout and stderr despite interleaving' do
@@ -153,17 +165,20 @@ describe 'RightScale::popen3' do
       (results << "stderr #{i}\n") if 0 == i % 10
     end
     runner.error_text.should == results
+    runner.pid.should > 0
   end
-  
+
   it 'should setup environment variables' do
     command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
     runner = RightPopenSpec::Runner.new
     runner.run_right_popen(command)
     runner.status.exitstatus.should == 0
     runner.output_text.should_not include('_test_')
+    runner.pid = nil
     runner.run_right_popen(command, :__test__ => '42')
     runner.status.exitstatus.should == 0
     runner.output_text.should match(/^__test__=42$/)
+    runner.pid.should > 0
   end
 
   it 'should restore environment variables' do
@@ -177,6 +192,7 @@ describe 'RightScale::popen3' do
     runner.output_text.should match(/^__test__=42$/)
     ENV.each { |k, v| old_envs[k].should == v }
     old_envs.each { |k, v| ENV[k].should == v }
+    runner.pid.should > 0
   end
 
   if is_windows?
@@ -188,6 +204,7 @@ describe 'RightScale::popen3' do
       runner.run_right_popen(command, 'PATH' => "c:/bogus\\bin")
       runner.status.exitstatus.should == 0
       runner.output_text.should include('PATH=c:\\bogus\\bin;')
+      runner.pid.should > 0
     end
   else
     it 'should allow running bash command lines starting with a built-in command' do
@@ -196,6 +213,7 @@ describe 'RightScale::popen3' do
       runner.run_right_popen(command)
       runner.status.exitstatus.should == 0
       runner.output_text.should == "1\n2\n3\n4\n5\n"
+      runner.pid.should > 0
     end
   end
 
@@ -207,6 +225,7 @@ describe 'RightScale::popen3' do
     runner.status.exitstatus.should == 0
     runner.output_text.should == STANDARD_MESSAGE + "\n"
     runner.error_text.should == ERROR_MESSAGE + "\n"
+    runner.pid.should > 0
   end
 
   it 'should pass input to child process' do
@@ -216,6 +235,7 @@ describe 'RightScale::popen3' do
     runner.status.exitstatus.should == 0
     runner.output_text.should == "43\n"
     runner.error_text.should be_empty
+    runner.pid.should > 0
   end
 
 end

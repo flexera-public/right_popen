@@ -110,6 +110,7 @@ module RightScale
   # standard streams of the child process.
   #
   # === Parameters
+  # options[:pid_handler](Symbol):: Token for pid handler method name.
   # options[:temp_dir]:: Path to temporary directory where executable files are
   #                      created, default to /tmp if not specified
   #
@@ -140,7 +141,10 @@ module RightScale
       end
 
       # Launch child process
-      EM.popen(exec_file, StdOutHandler, options, c, r, w)
+      connection = EM.popen(exec_file, StdOutHandler, options, c, r, w)
+      if options[:pid_handler]
+        options[:target].method(options[:pid_handler]).call(EM.get_subprocess_pid(connection.signature))
+      end
 
       # Restore environment variables
       unless envs.empty?
@@ -149,7 +153,7 @@ module RightScale
       end
 
       # Do not close 'w', strange things happen otherwise
-      # (command protocol socket gets closed during decommission) 
+      # (command protocol socket gets closed during decommission)
       $stderr.reopen saved_stderr
     end
     true

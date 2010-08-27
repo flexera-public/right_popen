@@ -26,6 +26,11 @@ to report issues.
   @stdout_text = ""
   @stderr_text = ""
   @exit_status = nil
+  @pid = nil
+
+  def on_pid(pid)
+    @pid = pid
+  end
 
   def on_read_stdout(data)
     @stdout_text << data
@@ -45,6 +50,7 @@ to report issues.
       RightScale.popen3(:command        => command,
                         :target         => self,
                         :environment    => nil,
+                        :pid_handler    => :on_pid,
                         :stdout_handler => :on_read_stdout,
                         :stderr_handler => :on_read_stderr,
                         :exit_handler   => :on_exit)
@@ -60,6 +66,7 @@ to report issues.
   puts "@stdout_text = #{@stdout_text}"
   puts "@stderr_text = #{@stderr_text}"
   puts "@exit_status.exitstatus = #{@exit_status.exitstatus}"
+  puts "@pid = #{@pid}"
 
 
 == INSTALLATION

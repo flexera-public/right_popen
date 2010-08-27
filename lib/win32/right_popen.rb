@@ -217,7 +217,10 @@ module RightScale
     # streams aren't used directly by the connectors except that they are closed
     # on unbind.
     stderr_eventable = EM.watch(stream_err, StdErrHandler, options, stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
-    EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) { |c| c.notify_readable = true }
+    EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) do |c|
+      c.notify_readable = true
+      options[:target].method(options[:pid_handler]).call(pid) if options[:pid_handler]
+    end
     EM.attach(stream_in, StdInHandler, options, stream_in) if options[:input]
 
     # note that control returns to the caller, but the launched cmd continues
