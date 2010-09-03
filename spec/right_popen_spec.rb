@@ -99,6 +99,19 @@ describe 'RightScale::popen3' do
     runner.pid.should > 0
   end
 
+  it 'should correctly handle many small processes' do
+    pending 'Set environment variable TEST_STRESS to enable' unless ENV['TEST_STRESS']
+    1000.times do
+      command = "exit 0"
+      runner = RightPopenSpec::Runner.new
+      runner.run_right_popen(command)
+      runner.status.exitstatus.should == 0
+      runner.output_text.should == ""
+      runner.error_text.should == ''
+      runner.pid.should > 0
+    end
+  end
+
   it 'should preserve the integrity of stdout when stderr is unavailable' do
     count = LARGE_OUTPUT_COUNTER
     command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_stdout_only.rb'))}\" #{count}"
