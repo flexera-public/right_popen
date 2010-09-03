@@ -79,6 +79,10 @@ describe 'RightScale::popen3' do
 
   end
 
+  def is_windows?
+    return !!(RUBY_PLATFORM =~ /mswin/)
+  end
+
   it 'should redirect output' do
     command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
     runner = RightPopenSpec::Runner.new
@@ -102,7 +106,7 @@ describe 'RightScale::popen3' do
   it 'should correctly handle many small processes' do
     pending 'Set environment variable TEST_STRESS to enable' unless ENV['TEST_STRESS']
     1000.times do
-      command = "exit 0"
+      command = is_windows? ? "cmd.exe /c exit 0" : "exit 0"
       runner = RightPopenSpec::Runner.new
       runner.run_right_popen(command)
       runner.status.exitstatus.should == 0
