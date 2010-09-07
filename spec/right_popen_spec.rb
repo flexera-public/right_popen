@@ -12,13 +12,14 @@ describe 'RightScale::popen3' do
         @status         = nil
         @last_exception = nil
         @last_iteration = 0
+        @did_timeout    = false
       end
 
-      attr_reader :output_text, :error_text, :status
+      attr_reader :output_text, :error_text, :status, :did_timeout
       attr_accessor :pid
 
       def do_right_popen(command, env=nil, input=nil)
-        @timeout = EM::Timer.new(2) { puts "\n** Failed to run #{command.inspect}: Timeout"; EM.stop }
+        @timeout = EM::Timer.new(2) { puts "\n** Failed to run #{command.inspect}: Timeout"; @did_timeout = true; EM.stop }
         @output_text = ''
         @error_text  = ''
         @status      = nil
@@ -218,6 +219,19 @@ describe 'RightScale::popen3' do
       runner.run_right_popen(command)
       runner.status.exitstatus.should == 0
       runner.output_text.should == "1\n2\n3\n4\n5\n"
+      runner.pid.should > 0
+    end
+
+    it 'should support running background processes' do
+      command = "(sleep 20)&"
+      now = Time.now
+      runner = RightPopenSpec::Runner.new
+      runner.run_right_popen(command)
+      finished = Time.now
+      (finished - now).should < 20
+      runner.did_timeout.should be_false
+      runner.status.exitstatus.should == 0
+      runner.output_text.should == ""
       runner.pid.should > 0
     end
   end

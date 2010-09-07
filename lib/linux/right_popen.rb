@@ -143,8 +143,17 @@ module RightScale
 
       # Launch child process
       connection = EM.popen(options[:exec_file], StdOutHandler, options, c, r, w)
+      pid = EM.get_subprocess_pid(connection.signature)
       if options[:pid_handler]
-        options[:target].method(options[:pid_handler]).call(EM.get_subprocess_pid(connection.signature))
+        options[:target].method(options[:pid_handler]).call(pid)
+      end
+
+      wait_timer = EM::PeriodicTimer.new(1) do
+        status = Process.waitpid(pid, Process::WNOHANG)
+        unless status.nil?
+          wait_timer.cancel
+          options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
+        end
       end
 
       # Restore environment variables
