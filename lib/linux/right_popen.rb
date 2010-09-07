@@ -30,80 +30,24 @@ require 'eventmachine'
 require 'tempfile'
 
 module RightScale
-
-  # Provides an eventmachine callback handler for the stdout stream.
-  module StdOutHandler
-
-    # === Parameters
-    # options[:input](String):: Input to be sent to child process stdin
-    # options[:target](Object):: Object defining handler methods to be called.
-    # options[:stdout_handler(String):: Token for stdout handler method name.
-    # options[:exit_handler(String):: Token for exit handler method name.
-    # options[:exec_file](String):: Path to executed file
-    # stderr_eventable(Connector):: EM object representing stderr handler.
-    # read_fd(IO):: Standard output read file descriptor.
-    # write_fd(IO):: Standard output write file descriptor.
-    def initialize(options, stderr_eventable, read_fd, write_fd)
-      @input = options[:input]
-      @target = options[:target]
-      @stdout_handler = options[:stdout_handler]
-      @exit_handler = options[:exit_handler]
-      @exec_file = options[:exec_file]
-      @stderr_eventable = stderr_eventable
-      # Just so they don't get GCed before the process goes away
-      @read_fd = read_fd
-      @write_fd = write_fd
+  module PipeHandler
+    def initialize(target, handler)
+      @target = target
+      @handler = handler
     end
 
-    # Send input to child process stdin
-    def post_init
-      send_data(@input) if @input
-    end
-
-    # Callback from EM to receive data.
     def receive_data(data)
-      @target.method(@stdout_handler).call(data) if @stdout_handler
-    end
-
-    # Callback from EM to unbind.
-    def unbind
-      # We force the attached stderr handler to go away so that
-      # we don't end up with a broken pipe
-      File.delete(@exec_file) if File.file?(@exec_file)
-      @stderr_eventable.force_detach if @stderr_eventable
-      @target.method(@exit_handler).call(get_status) if @exit_handler
+      @target.method(@handler).call(data) if @handler
     end
   end
-
-  module StdErrHandler
-
-    # === Parameters
-    # target(Object):: Object defining handler methods to be called.
-    #
-    # stderr_handler(String):: Token for stderr handler method name.
-    # read_fd(IO):: Error output read file descriptor.
-    def initialize(target, stderr_handler, read_fd)
-      @target = target
-      @stderr_handler = stderr_handler
-      @unbound = false
-      @read_fd = read_fd # So it doesn't get GCed
+  module InputHandler
+    def initialize(string)
+      @string = string
     end
 
-    # Callback from EM to receive data.
-    def receive_data(data)
-      @target.method(@stderr_handler).call(data)
-    end
-
-    # Callback from EM to unbind.
-    def unbind
-      @unbound = true
-    end
-
-    # Forces detachment of the stderr handler on EM's next tick.
-    def force_detach
-      # Use next tick to prevent issue in EM where descriptors list
-      # gets out-of-sync when calling detach in an unbind callback
-      EM.next_tick { detach unless @unbound }
+    def post_init
+      send_data(@string) if @string
+      close_connection_after_writing
     end
   end
 
@@ -117,56 +61,58 @@ module RightScale
   #
   # See RightScale.popen3
   def self.popen3_imp(options)
-    # First write command to file so that it's possible to use popen3 with
-    # a bash command line (e.g. 'for i in 1 2 3 4 5; ...')
-    exec_file = Tempfile.new('exec', options[:temp_dir] || Dir.tmpdir)
-    options[:exec_file] = exec_file.path
-    exec_file.puts(options[:command])
-    exec_file.close
-    File.chmod(0700, exec_file.path)
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
-      saved_stderr = $stderr.dup
-      r, w = Socket::pair(Socket::AF_LOCAL, Socket::SOCK_STREAM, 0)#IO::pipe
+      inr, inw = IO::pipe
+      outr, outw = IO::pipe
+      errr, errw = IO::pipe
 
-      $stderr.reopen w
-      c = EM.attach(r, StdErrHandler, options[:target], options[:stderr_handler], r) if options[:stderr_handler]
+      [inr, inw, outr, outw, errr, errw].each {|fdes| fdes.sync = true}
 
-      # Setup environment for child process
-      envs = {}
-      options[:environment].each { |k, v| envs[k.to_s] = v } if options[:environment]
-      unless envs.empty?
-        old_envs = {}
-        ENV.each { |k, v| old_envs[k] = v if envs.include?(k) }
-        envs.each { |k, v| ENV[k] = v }
-      end
+      pid = fork do
+        options[:environment].each do |k, v|
+          ENV[k.to_s] = v
+        end unless options[:environment].nil?
 
-      # Launch child process
-      connection = EM.popen(options[:exec_file], StdOutHandler, options, c, r, w)
-      pid = EM.get_subprocess_pid(connection.signature)
-      if options[:pid_handler]
-        options[:target].method(options[:pid_handler]).call(pid)
-      end
+        inw.close
+        outr.close
+        errr.close
+        $stdin.reopen inr
+        $stdout.reopen outw
+        $stderr.reopen errw
 
-      wait_timer = EM::PeriodicTimer.new(1) do
-        status = Process.waitpid(pid, Process::WNOHANG)
-        unless status.nil?
-          wait_timer.cancel
-          options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
+        if options[:command].instance_of?(String)
+          exec "sh", "-c", options[:command]
+        else
+          exec *options[:command]
         end
       end
 
-      # Restore environment variables
-      unless envs.empty?
-        envs.each { |k, _| ENV[k] = nil }
-        old_envs.each { |k, v| ENV[k] = v }
-      end
+      inr.close
+      outw.close
+      errw.close
+      stderr = EM.attach(errr, PipeHandler, options[:target],
+                         options[:stderr_handler])
+      stdout = EM.attach(outr, PipeHandler, options[:target],
+                         options[:stdout_handler])
+      stdin = EM.attach(inw, InputHandler, options[:input])
 
-      # Do not close 'w', strange things happen otherwise
-      # (command protocol socket gets closed during decommission)
-      $stderr.reopen saved_stderr
+      options[:target].method(options[:pid_handler]).call(pid) if
+        options.key? :pid_handler
+
+      wait_timer = EM::PeriodicTimer.new(1) do
+        value = Process.waitpid2(pid, Process::WNOHANG)
+        unless value.nil?
+          ignored, status = value
+          wait_timer.cancel
+          stdin.close_connection
+          stdout.close_connection
+          stderr.close_connection
+          options[:target].method(options[:exit_handler]).call(status) if
+            options[:exit_handler]
+        end
+      end
     end
     true
   end
-
 end
