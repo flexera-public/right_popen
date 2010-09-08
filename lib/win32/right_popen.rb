@@ -209,11 +209,22 @@ module RightScale
     environment_hash = options[:environment] || {}
     environment_strings = RightPopenEx.merge_environment(environment_hash)
 
+    # resolve command string from array, if necessary.
+    cmd = options[:command]
+    if cmd.kind_of?(Array)
+      escaped = []
+      cmd.flatten.each do |arg|
+        value = arg.to_s
+        escaped << (value.index(' ') ? "\"#{value}\"" : value)
+      end
+      cmd = escaped.join(" ")
+    end
+
     # launch cmd and request asynchronous output.
     mode = "t"
     show_window = false
     asynchronous_output = true
-    stream_in, stream_out, stream_err, pid = RightPopen.popen4(options[:command], mode, show_window, asynchronous_output, environment_strings)
+    stream_in, stream_out, stream_err, pid = RightPopen.popen4(cmd, mode, show_window, asynchronous_output, environment_strings)
 
     # close input immediately.
     stream_in.close if options[:input].nil?

@@ -266,7 +266,7 @@ describe 'RightScale::popen3' do
   end
 
   it 'should support raw command arguments' do
-    command = ["echo", "*"]
+    command = is_windows? ? ["cmd.exe", "/c", "echo", "*"] : ["echo", "*"]
     runner = RightPopenSpec::Runner.new
     status = runner.run_right_popen(command)
     status.status.exitstatus.should == 0

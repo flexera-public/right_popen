@@ -45,7 +45,7 @@ module RightScale
   # All handlers must be methods exposed by the given target.
   #
   # === Parameters
-  # options[:command](String):: Command to execute, including any arguments
+  # options[:command](String or Array):: Command to execute, including any arguments as a single string or an array of command and arguments
   # options[:environment](Hash):: Hash of environment variables values keyed by name
   # options[:input](String):: Input string that will get streamed into child's process stdin
   # options[:target](Object):: object defining handler methods to be called, optional (no handlers can be defined if not specified)
