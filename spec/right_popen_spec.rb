@@ -251,15 +251,6 @@ describe 'RightScale::popen3' do
       status.pid.should > 0
     end
 
-    it 'should support raw command arguments' do
-      command = ["echo", "*"]
-      runner = RightPopenSpec::Runner.new
-      status = runner.run_right_popen(command)
-      status.status.exitstatus.should == 0
-      status.output_text.should == "*\n"
-      status.pid.should > 0
-    end
-
     it 'should support running background processes' do
       command = "(sleep 20)&"
       now = Time.now
@@ -272,6 +263,15 @@ describe 'RightScale::popen3' do
       status.output_text.should == ""
       status.pid.should > 0
     end
+  end
+
+  it 'should support raw command arguments' do
+    command = ["echo", "*"]
+    runner = RightPopenSpec::Runner.new
+    status = runner.run_right_popen(command)
+    status.status.exitstatus.should == 0
+    status.output_text.should == "*\n"
+    status.pid.should > 0
   end
 
   it 'should run repeatedly without leaking resources' do

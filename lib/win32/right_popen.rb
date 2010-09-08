@@ -200,6 +200,11 @@ module RightScale
   def self.popen3_imp(options)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
 
+    # merge command string
+    unless options[:command].instance_of?(String)
+      options[:command] = options[:command].join(' ')
+    end
+
     # merge and format environment strings, if necessary.
     environment_hash = options[:environment] || {}
     environment_strings = RightPopenEx.merge_environment(environment_hash)
