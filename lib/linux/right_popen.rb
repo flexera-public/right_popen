@@ -30,6 +30,10 @@ require 'eventmachine'
 require 'tempfile'
 
 module RightScale
+
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{PipeHandler.name} is already defined" if defined?(PipeHandler)
+
   module PipeHandler
     def initialize(target, handler)
       @target = target
@@ -40,6 +44,10 @@ module RightScale
       @target.method(@handler).call(data) if @handler
     end
   end
+
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{InputHandler.name} is already defined" if defined?(InputHandler)
+
   module InputHandler
     def initialize(string)
       @string = string

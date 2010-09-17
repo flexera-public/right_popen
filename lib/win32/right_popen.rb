@@ -29,6 +29,9 @@ require File.join(File.dirname(__FILE__), 'right_popen.so')  # win32 native code
 
 module RightScale
 
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{StdInHandler.name} is already defined" if defined?(StdInHandler)
+
   # Eventmachine callback handler for stdin stream
   module StdInHandler
 
@@ -53,6 +56,9 @@ module RightScale
     end
 
   end
+
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{StdOutHandler.name} is already defined" if defined?(StdOutHandler)
 
   # Provides an eventmachine callback handler for the stdout stream.
   module StdOutHandler
@@ -149,6 +155,9 @@ module RightScale
       @stream_out.close
     end
   end
+
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{StdErrHandler.name} is already defined" if defined?(StdErrHandler)
 
   # Provides an eventmachine callback handler for the stderr stream.
   module StdErrHandler
