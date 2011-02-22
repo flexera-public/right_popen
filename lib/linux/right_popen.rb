@@ -111,13 +111,16 @@ module RightScale
       wait_timer = EM::PeriodicTimer.new(1) do
         value = Process.waitpid2(pid, Process::WNOHANG)
         unless value.nil?
-          ignored, status = value
-          wait_timer.cancel
-          stdin.close_connection
-          stdout.close_connection
-          stderr.close_connection
-          options[:target].method(options[:exit_handler]).call(status) if
-            options[:exit_handler]
+          begin
+            ignored, status = value
+            options[:target].method(options[:exit_handler]).call(status) if
+              options[:exit_handler]
+          ensure
+            stdin.close_connection
+            stdout.close_connection
+            stderr.close_connection
+            wait_timer.cancel
+          end
         end
       end
     end
