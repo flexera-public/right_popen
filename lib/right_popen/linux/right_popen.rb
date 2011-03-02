@@ -27,10 +27,36 @@
 
 require 'rubygems'
 require 'eventmachine'
-require 'tempfile'
+require File.expand_path(File.join(File.dirname(__FILE__), "process"))
+require File.expand_path(File.join(File.dirname(__FILE__), "accumulator"))
+require File.expand_path(File.join(File.dirname(__FILE__), "utilities"))
 
 module RightScale
+  # ensure uniqueness of handler to avoid confusion.
+  raise "#{StatusHandler.name} is already defined" if defined?(StatusHandler)
 
+  module StatusHandler
+    def initialize(file_handle)
+      # Voodoo to make sure that Ruby doesn't gc the file handle
+      # (closing the stream) before we're done with it.  No, oddly
+      # enough EventMachine is not good about holding on to this
+      # itself.
+      @handle = file_handle
+      @data = ""
+    end
+
+    def receive_data(data)
+      @data << data
+    end
+
+    def unbind
+      if @data.size > 0
+        e = Marshal.load @data
+        raise (Exception === e ? e : "unknown failure: saw #{e} on status channel")
+      end
+    end
+  end
+  
   # ensure uniqueness of handler to avoid confusion.
   raise "#{PipeHandler.name} is already defined" if defined?(PipeHandler)
 
@@ -74,61 +100,36 @@ module RightScale
   #
   # === Parameters
   # options[:pid_handler](Symbol):: Token for pid handler method name.
-  # options[:temp_dir]:: Path to temporary directory where executable files are
-  #                      created, default to /tmp if not specified
   #
   # See RightScale.popen3
   def self.popen3_imp(options)
     GC.start # To garbage collect open file descriptors from passed executions
     EM.next_tick do
-      inr, inw = IO::pipe
-      outr, outw = IO::pipe
-      errr, errw = IO::pipe
+      process = RightPopen::Process.new(:environment => options[:environment] || {})
+      process.fork(options[:command])
 
-      [inr, inw, outr, outw, errr, errw].each {|fdes| fdes.sync = true}
+      status_handler = EM.attach(process.status_fd, StatusHandler, process.status_fd)
+      stderr_handler = EM.attach(process.stderr, PipeHandler, process.stderr, options[:target],
+                                 options[:stderr_handler])
+      stdout_handler = EM.attach(process.stdout, PipeHandler, process.stdout, options[:target],
+                                 options[:stdout_handler])
+      stdin_handler = EM.attach(process.stdin, InputHandler, process.stdin, options[:input])
 
-      pid = fork do
-        options[:environment].each do |k, v|
-          ENV[k.to_s] = v
-        end unless options[:environment].nil?
-
-        inw.close
-        outr.close
-        errr.close
-        $stdin.reopen inr
-        $stdout.reopen outw
-        $stderr.reopen errw
-
-        if options[:command].instance_of?(String)
-          exec "sh", "-c", options[:command]
-        else
-          exec *options[:command]
-        end
-      end
-
-      inr.close
-      outw.close
-      errw.close
-      stderr = EM.attach(errr, PipeHandler, errr, options[:target],
-                         options[:stderr_handler])
-      stdout = EM.attach(outr, PipeHandler, outr, options[:target],
-                         options[:stdout_handler])
-      stdin = EM.attach(inw, InputHandler, inw, options[:input])
-
-      options[:target].method(options[:pid_handler]).call(pid) if
+      options[:target].method(options[:pid_handler]).call(process.pid) if
         options.key? :pid_handler
 
       wait_timer = EM::PeriodicTimer.new(1) do
-        value = Process.waitpid2(pid, Process::WNOHANG)
+        value = ::Process.waitpid2(process.pid, Process::WNOHANG)
         unless value.nil?
           begin
             ignored, status = value
             options[:target].method(options[:exit_handler]).call(status) if
               options[:exit_handler]
           ensure
-            stdin.close_connection
-            stdout.close_connection
-            stderr.close_connection
+            stdin_handler.close_connection
+            stdout_handler.close_connection
+            stderr_handler.close_connection
+            status_handler.close_connection
             wait_timer.cancel
           end
         end

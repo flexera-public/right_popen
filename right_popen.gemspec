@@ -53,4 +53,6 @@ EOF
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
   end
   spec.add_development_dependency('rspec', "~> 1.3")
+  spec.add_development_dependency('rake', "~> 0.8.7")
+  spec.add_development_dependency('flexmock')
 end

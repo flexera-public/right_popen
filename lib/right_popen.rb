@@ -26,9 +26,9 @@
 # It relies on EventMachine for most of its internal mechanisms.
 
 if RUBY_PLATFORM =~ /mswin/
-  require File.expand_path(File.join(File.dirname(__FILE__), 'win32', 'right_popen'))
+  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'win32', 'right_popen'))
 else
-  require File.expand_path(File.join(File.dirname(__FILE__), 'linux', 'right_popen'))
+  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'right_popen'))
 end
 
 module RightScale

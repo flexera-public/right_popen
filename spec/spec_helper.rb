@@ -1,6 +1,8 @@
 require 'rubygems'
+require 'bundler/setup'
 require 'spec'
 require 'eventmachine'
+require 'flexmock'
 require File.join(File.dirname(__FILE__), '..', 'lib', 'right_popen')
 
 RUBY_CMD         = 'ruby'
@@ -17,4 +19,8 @@ REPEAT_TEST_COUNTER = 256
 
 def is_windows?
   return RUBY_PLATFORM =~ /mswin/
+end
+
+Spec::Runner.configure do |config|
+  config.mock_with :flexmock
 end
