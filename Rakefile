@@ -1,14 +1,31 @@
 require 'rubygems'
+require 'bundler'
 require 'fileutils'
 require 'rake'
 require 'rake/clean'
-require 'rake/testtask'
+require 'rake/gempackagetask'
+require 'rake/rdoctask'
+require 'spec/rake/spectask'
 require 'rbconfig'
 
 include Config
 
+Bundler::GemHelper.install_tasks
+
+# == Gem == #
+
+gemtask = Rake::GemPackageTask.new(Gem::Specification.load("right_popen.gemspec")) do |package|
+  package.package_dir = ENV['PACKAGE_DIR'] || 'pkg'
+  package.need_zip = true
+  package.need_tar = true
+end
+
+directory gemtask.package_dir
+
+CLEAN.include(gemtask.package_dir)
+
 desc "Clean any build files for right_popen"
-task :clean do
+task :win_clean do
   if RUBY_PLATFORM =~ /mswin/
     if File.exists?('ext/Makefile')
       Dir.chdir('ext') do
@@ -18,6 +35,7 @@ task :clean do
     rm 'lib/win32/right_popen.so' if File.file?('lib/win32/right_popen.so')
   end
 end
+task :clean => :win_clean
 
 desc "Build right_popen (but don't install it)"
 task :build => [:clean] do
@@ -32,10 +50,7 @@ task :build => [:clean] do
 end
 
 desc "Build a binary gem"
-task :gem => [:build] do
-   Dir["*.gem"].each { |gem| rm gem }
-   ruby 'right_popen.gemspec'
-end
+task :gem => [:build]
 
 desc 'Install the right_popen library as a gem'
 task :install_gem => [:gem] do
@@ -49,7 +64,44 @@ task :reinstall_gem do
    sh "rake install_gem"
 end
 
-desc 'Runs all spec tests'
-task :spec do
-  sh "spec spec/*_spec.rb"
+# == Unit Tests == #
+
+task :specs => :spec
+
+desc "Run unit tests"
+Spec::Rake::SpecTask.new do |t|
+  t.spec_files = Dir['spec/**/*_spec.rb']
+end
+
+desc "Run unit tests with RCov"
+Spec::Rake::SpecTask.new(:rcov) do |t|
+  t.spec_files = Dir['spec/**/*_spec.rb']
+  t.rcov = true
+end
+
+desc "Print Specdoc for unit tests"
+Spec::Rake::SpecTask.new(:doc) do |t|
+   t.spec_opts = ["--format", "specdoc", "--dry-run"]
+   t.spec_files = Dir['spec/**/*_spec.rb']
+end
+
+# == Documentation == #
+
+desc "Generate API documentation to doc/rdocs/index.html"
+Rake::RDocTask.new do |rd|
+  rd.rdoc_dir = 'doc/rdocs'
+  rd.main = 'README.rdoc'
+  rd.rdoc_files.include 'README.rdoc', "lib/**/*.rb"
+
+  rd.options << '--inline-source'
+  rd.options << '--line-numbers'
+  rd.options << '--all'
+  rd.options << '--fileboxes'
+  rd.options << '--diagram'
+end
+
+# == Emacs integration == #
+desc "Rebuild TAGS file"
+task :tags do
+  sh "rtags -R lib spec"
 end
