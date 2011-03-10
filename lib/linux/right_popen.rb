@@ -35,7 +35,12 @@ module RightScale
   raise "#{PipeHandler.name} is already defined" if defined?(PipeHandler)
 
   module PipeHandler
-    def initialize(target, handler)
+    def initialize(file_handle, target, handler)
+      # Voodoo to make sure that Ruby doesn't gc the file handle
+      # (closing the stream) before we're done with it.  No, oddly
+      # enough EventMachine is not good about holding on to this
+      # itself.
+      @handle = file_handle
       @target = target
       @handler = handler
     end
@@ -49,7 +54,12 @@ module RightScale
   raise "#{InputHandler.name} is already defined" if defined?(InputHandler)
 
   module InputHandler
-    def initialize(string)
+    def initialize(file_handle, string)
+      # Voodoo to make sure that Ruby doesn't gc the file handle
+      # (closing the stream) before we're done with it.  No, oddly
+      # enough EventMachine is not good about holding on to this
+      # itself.
+      @handle = file_handle
       @string = string
     end
 
@@ -99,11 +109,11 @@ module RightScale
       inr.close
       outw.close
       errw.close
-      stderr = EM.attach(errr, PipeHandler, options[:target],
+      stderr = EM.attach(errr, PipeHandler, errr, options[:target],
                          options[:stderr_handler])
-      stdout = EM.attach(outr, PipeHandler, options[:target],
+      stdout = EM.attach(outr, PipeHandler, outr, options[:target],
                          options[:stdout_handler])
-      stdin = EM.attach(inw, InputHandler, options[:input])
+      stdin = EM.attach(inw, InputHandler, inw, options[:input])
 
       options[:target].method(options[:pid_handler]).call(pid) if
         options.key? :pid_handler
