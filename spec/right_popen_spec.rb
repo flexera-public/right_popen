@@ -295,4 +295,22 @@ describe 'RightScale::popen3' do
     status.pid.should > 0
   end
 
+  it 'should handle child processes that close stdout but keep running' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    status = runner.run_right_popen(command, nil, nil)
+    status.did_timeout.should be_true
+    status.output_text.should be_empty
+    status.error_text.should == "Closing stdout\n"
+  end
+
+  it 'should handle child processes that spawn long running background processes' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    status = runner.run_right_popen(command, nil, nil)
+    status.status.exitstatus.should == 0
+    status.did_timeout.should be_false
+    status.output_text.should be_empty
+    status.error_text.should be_empty
+  end
 end
