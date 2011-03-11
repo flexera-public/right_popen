@@ -27,16 +27,18 @@ describe 'RightScale::popen3' do
         @error_text     = nil
         @status         = nil
         @last_exception = nil
+        @did_timeout    = false
         @last_iteration = 0
       end
 
-      attr_reader :output_text, :error_text, :status
+      attr_reader :output_text, :error_text, :status, :did_timeout
 
       def do_right_popen(command, env=nil, input=nil)
-        @timeout = EM::Timer.new(2) { puts "\n** Failed to run #{command.inspect}: Timeout"; EM.stop }
+        @timeout = EM::Timer.new(2) { @did_timeout = true; puts "\n** Failed to run #{command.inspect}: Timeout"; EM.stop }
         @output_text = ''
         @error_text  = ''
         @status      = nil
+        @did_timeout = false
         RightScale.popen3(:command        => command, 
                           :input          => input,
                           :target         => self, 
@@ -218,4 +220,23 @@ describe 'RightScale::popen3' do
     runner.error_text.should be_empty
   end
 
+  it 'should handle child processes that close stdout but keep running' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command, nil, "42\n")
+    runner.status.exitstatus.should == 0
+    runner.did_timeout.should be_false
+    runner.output_text.should be_empty
+    runner.error_text.should == "Closing stdout\nExiting\n"
+  end
+
+  it 'should handle child processes that spawn long running background processes' do
+    command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
+    runner = RightPopenSpec::Runner.new
+    runner.run_right_popen(command, nil, "42\n")
+    runner.status.exitstatus.should == 0
+    runner.did_timeout.should be_false
+    runner.output_text.should be_empty
+    runner.error_text.should be_empty
+  end
 end
