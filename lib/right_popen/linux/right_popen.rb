@@ -49,6 +49,19 @@ module RightScale
       @data << data
     end
 
+    def drain_and_close
+      begin
+        while ready = IO.select([@handle], nil, nil, 0)
+          break if @handle.eof?
+          data = @handle.readpartial(4096)
+          receive_data(data)
+        end
+      rescue Errno::EBADF
+      rescue EOFError
+      end
+      close_connection
+    end
+
     def unbind
       if @data.size > 0
         e = Marshal.load @data
@@ -74,6 +87,19 @@ module RightScale
     def receive_data(data)
       @target.method(@handler).call(data) if @handler
     end
+
+    def drain_and_close
+      begin
+        while ready = IO.select([@handle], nil, nil, 0)
+          break if @handle.eof?
+          data = @handle.readpartial(4096)
+          receive_data(data)
+        end
+      rescue Errno::EBADF
+      rescue EOFError
+      end
+      close_connection
+    end
   end
 
   # ensure uniqueness of handler to avoid confusion.
@@ -92,6 +118,10 @@ module RightScale
     def post_init
       send_data(@string) if @string
       close_connection_after_writing
+    end
+
+    def drain_and_close
+      close_connection
     end
   end
 
@@ -126,10 +156,10 @@ module RightScale
             options[:target].method(options[:exit_handler]).call(status) if
               options[:exit_handler]
           ensure
-            stdin_handler.close_connection
-            stdout_handler.close_connection
-            stderr_handler.close_connection
-            status_handler.close_connection
+            stdin_handler.drain_and_close
+            stdout_handler.drain_and_close
+            stderr_handler.drain_and_close
+            status_handler.drain_and_close
             wait_timer.cancel
           end
         end
