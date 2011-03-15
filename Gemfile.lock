@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    right_popen (1.0.13)
+    right_popen (1.0.14)
       eventmachine (>= 0.12.10)
 
 GEM
