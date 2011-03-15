@@ -109,15 +109,11 @@ module RightScale
       process.fork(options[:command])
 
       status_handler = EM.attach(process.status_fd, StatusHandler, process.status_fd)
-      process.status_fd.autoclose = false
       stderr_handler = EM.attach(process.stderr, PipeHandler, process.stderr, options[:target],
                                  options[:stderr_handler])
-      process.stderr.autoclose = false
       stdout_handler = EM.attach(process.stdout, PipeHandler, process.stdout, options[:target],
                                  options[:stdout_handler])
-      process.stdout.autoclose = false
       stdin_handler = EM.attach(process.stdin, InputHandler, process.stdin, options[:input])
-      process.stdin.autoclose = false
 
       options[:target].method(options[:pid_handler]).call(process.pid) if
         options.key? :pid_handler
