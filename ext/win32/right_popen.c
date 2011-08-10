@@ -1457,7 +1457,8 @@ static VALUE right_popen_get_process_environment(VALUE vSelf)
 //  'RightPopen' module entry point
 void Init_right_popen()
 {
-    VALUE vModule = rb_define_module("RightPopen");
+    VALUE vCompanyModule = rb_define_module("RightScale");
+    VALUE vModule = rb_define_module_under(vCompanyModule, "RightPopen");
 
     rb_define_module_function(vModule, "popen4", (VALUE(*)(ANYARGS))right_popen_popen4, -1);
     rb_define_module_function(vModule, "async_read", (VALUE(*)(ANYARGS))right_popen_async_read, 1);

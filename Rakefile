@@ -8,6 +8,12 @@ require 'rake/rdoctask'
 require 'spec/rake/spectask'
 require 'rbconfig'
 
+def list_spec_files
+  list = Dir['spec/**/*_spec.rb']
+  list.delete_if { |path| path.include?('/linux/') } if RUBY_PLATFORM =~ /mswin/
+  list
+end
+
 include Config
 
 Bundler::GemHelper.install_tasks
@@ -70,19 +76,19 @@ task :specs => :spec
 
 desc "Run unit tests"
 Spec::Rake::SpecTask.new do |t|
-  t.spec_files = Dir['spec/**/*_spec.rb']
+  t.spec_files = list_spec_files
 end
 
 desc "Run unit tests with RCov"
 Spec::Rake::SpecTask.new(:rcov) do |t|
-  t.spec_files = Dir['spec/**/*_spec.rb']
+  t.spec_files = list_spec_files
   t.rcov = true
 end
 
 desc "Print Specdoc for unit tests"
 Spec::Rake::SpecTask.new(:doc) do |t|
    t.spec_opts = ["--format", "specdoc", "--dry-run"]
-   t.spec_files = Dir['spec/**/*_spec.rb']
+   t.spec_files = list_spec_files
 end
 
 # == Documentation == #

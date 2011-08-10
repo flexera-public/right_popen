@@ -149,7 +149,7 @@ module RightScale
         runner = Runner.new
         status = runner.run_right_popen(command, 'PATH' => "c:/bogus\\bin")
         status.status.exitstatus.should == 0
-        status.output_text.should include('PATH=c:\\bogus\\bin;')
+        status.output_text.should include('c:\\bogus\\bin;')
         status.pid.should > 0
       end
     else
@@ -207,6 +207,7 @@ module RightScale
     end
 
     it 'should handle child processes that close stdout but keep running' do
+	  pending 'not implemented for windows' if is_windows?
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
       runner = Runner.new
       status = runner.run_right_popen(command, nil, nil)
@@ -216,6 +217,7 @@ module RightScale
     end
 
     it 'should handle child processes that spawn long running background processes' do
+	  pending 'not implemented for windows' if is_windows?
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
       runner = Runner.new
       status = runner.run_right_popen(command, nil, nil)

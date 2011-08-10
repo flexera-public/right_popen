@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2009 RightScale Inc
+# Copyright (c) 2009-2011 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -25,7 +25,7 @@ require 'rubygems'
 require 'eventmachine'
 require 'win32/process'
 
-require File.join(File.dirname(__FILE__), 'right_popen.so')  # win32 native code
+require File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'win32', 'right_popen.so'))  # win32 native code
 
 module RightScale
 
@@ -318,8 +318,11 @@ module RightScale
       # machine from registry supercedes process.
       merge_environment2(machine_environment_hash, result_environment_hash)
 
-      # user environment from registry supercedes machine and process.
-      merge_environment2(current_user_environment_hash, result_environment_hash)
+      # user environment from registry supercedes machine and process. the
+      # system account's (default user profile) registry values are not
+      # appropriate for merging, so skip it when we know we are the system.
+      current_user_name = (`whoami`.chomp rescue '')
+      merge_environment2(current_user_environment_hash, result_environment_hash) unless current_user_name == 'nt authority\system'
 
       # caller's environment supercedes all.
       merge_environment2(environment_hash, result_environment_hash)
