@@ -71,15 +71,14 @@ module RightScale
 
     def do_right_popen(command, env=nil, input=nil, &callback)
       status = RunnerStatus.new(command, callback)
-      pid = RightScale.popen3(:command        => command,
-                              :input          => input,
-                              :target         => status,
-                              :environment    => env,
-                              :stdout_handler => :on_read_stdout,
-                              :stderr_handler => :on_read_stderr,
-                              :pid_handler    => :on_pid,
-                              :exit_handler   => :on_exit)
-      pid.should > 0
+      RightScale.popen3(:command        => command,
+                      :input          => input,
+                      :target         => status,
+                      :environment    => env,
+                      :stdout_handler => :on_read_stdout,
+                      :stderr_handler => :on_read_stderr,
+                      :pid_handler    => :on_pid,
+                      :exit_handler   => :on_exit)
       status
     end
 

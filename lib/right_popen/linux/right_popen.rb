@@ -133,7 +133,7 @@ module RightScale
   #
   # See RightScale.popen3
   def self.popen3_imp(options)
-    GC.start # To garbage collect open file descriptors from passed executions
+    # note GC.start moved to common popen3 entry method for use by both windows and linux.
     EM.next_tick do
       process = RightPopen::Process.new(:environment => options[:environment] || {})
       process.fork(options[:command])
@@ -165,6 +165,6 @@ module RightScale
         end
       end
     end
-    return process.pid
+    true
   end
 end
