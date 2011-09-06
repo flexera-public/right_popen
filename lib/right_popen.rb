@@ -55,13 +55,12 @@ module RightScale
   # options[:exit_handler](String):: Exit handler method name, optional
   #
   # === Returns
-  # true:: Always returns true
+  # pid(Fixnum):: created process ID
   def self.popen3(options)
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     raise "Missing command" unless options[:command]
     raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler] && !options[:pid_handler]
-    RightScale.popen3_imp(options)
-    true
+    return RightScale.popen3_imp(options)
   end
 
 end

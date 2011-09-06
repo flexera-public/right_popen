@@ -60,8 +60,10 @@ task :gem => [:build]
 
 desc 'Install the right_popen library as a gem'
 task :install_gem => [:gem] do
-   file = Dir["*.gem"].first
-   sh "gem install #{file}"
+  Dir.chdir(File.dirname(__FILE__)) do
+     file = Dir["pkg/*.gem"].first
+     sh "gem install #{file}"
+  end
 end
 
 desc 'Uninstalls and reinstalls the right_popen library as a gem'

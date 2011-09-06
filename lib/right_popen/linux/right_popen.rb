@@ -165,6 +165,6 @@ module RightScale
         end
       end
     end
-    true
+    return process.pid
   end
 end

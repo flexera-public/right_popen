@@ -253,6 +253,7 @@ module RightScale
     # for waiting for the process to terminate or closing streams as the
     # watched eventables will handle this automagically. notification will be
     # sent to the exit_handler on process termination.
+    return pid
   end
 
   protected
