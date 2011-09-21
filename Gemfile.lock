@@ -1,8 +1,8 @@
 PATH
   remote: .
   specs:
-    right_popen (1.0.16)
-      eventmachine (>= 0.12.10)
+    right_popen (1.0.17)
+      eventmachine (>= 0.12.11)
 
 GEM
   remote: http://rubygems.org/
