@@ -60,7 +60,6 @@ module RightScale
     raise "EventMachine reactor must be started" unless EM.reactor_running?
     raise "Missing command" unless options[:command]
     raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler] && !options[:pid_handler]
-    GC.start # To garbage collect open file descriptors from passed executions
     return RightScale.popen3_imp(options)
   end
 

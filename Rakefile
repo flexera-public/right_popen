@@ -56,7 +56,19 @@ task :build => [:clean] do
 end
 
 desc "Build a binary gem"
-task :gem => [:build]
+task :gem => [:build] do
+  if RUBY_PLATFORM =~ /mswin/
+    # the built .so file must appear under 'lib/win32' for the windows gem and
+    # the base gem task doesn't appear to handle this. this may be an issue with
+    # calculating the file list in the gemspec before the .so has actually been
+    # created. workaround is to invoke the gem build gemspec command line after
+    # the build step produces the .so file.
+    sh 'gem build right_popen.gemspec'
+    FileUtils::rm_rf('pkg')
+    FileUtils::mkdir_p('pkg')
+    Dir.glob('*.gem').each { |gem_path| FileUtils::mv(gem_path, File.join('pkg', File.basename((gem_path)))) }
+  end
+end
 
 desc 'Install the right_popen library as a gem'
 task :install_gem => [:gem] do
