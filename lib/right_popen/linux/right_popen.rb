@@ -56,8 +56,7 @@ module RightScale
           data = @handle.readpartial(4096)
           receive_data(data)
         end
-      rescue Errno::EBADF
-      rescue EOFError
+      rescue Errno::EBADF, EOFError, IOError
       end
       close_connection
     end
@@ -95,8 +94,7 @@ module RightScale
           data = @handle.readpartial(4096)
           receive_data(data)
         end
-      rescue Errno::EBADF
-      rescue EOFError
+      rescue Errno::EBADF, EOFError, IOError
       end
       close_connection
     end
@@ -133,36 +131,49 @@ module RightScale
   #
   # See RightScale.popen3
   def self.popen3_imp(options)
-    GC.start # To garbage collect open file descriptors from passed executions
+    GC.start # To garbage collect open file descriptors from past executions
     EM.next_tick do
       process = RightPopen::Process.new(:environment => options[:environment] || {})
       process.fork(options[:command])
 
-      status_handler = EM.attach(process.status_fd, StatusHandler, process.status_fd)
-      stderr_handler = EM.attach(process.stderr, PipeHandler, process.stderr, options[:target],
-                                 options[:stderr_handler])
-      stdout_handler = EM.attach(process.stdout, PipeHandler, process.stdout, options[:target],
-                                 options[:stdout_handler])
-      stdin_handler = EM.attach(process.stdin, InputHandler, process.stdin, options[:input])
+      handlers = []
+      handlers << EM.attach(process.status_fd, StatusHandler, process.status_fd)
+      handlers << EM.attach(process.stderr, PipeHandler, process.stderr, options[:target],
+                            options[:stderr_handler])
+      handlers << EM.attach(process.stdout, PipeHandler, process.stdout, options[:target],
+                            options[:stdout_handler])
+      handlers << EM.attach(process.stdin, InputHandler, process.stdin, options[:input])
 
-      options[:target].method(options[:pid_handler]).call(process.pid) if
-        options.key? :pid_handler
+      options[:target].method(options[:pid_handler]).call(process.pid) if options.key? :pid_handler
 
-      wait_timer = EM::PeriodicTimer.new(1) do
-        value = ::Process.waitpid2(process.pid, Process::WNOHANG)
-        unless value.nil?
-          begin
-            ignored, status = value
-            options[:target].method(options[:exit_handler]).call(status) if
-              options[:exit_handler]
-          ensure
-            stdin_handler.drain_and_close
-            stdout_handler.drain_and_close
-            stderr_handler.drain_and_close
-            status_handler.drain_and_close
-            wait_timer.cancel
-          end
+      handle_exit(process.pid, 0.1, handlers, options)
+    end
+    true
+  end
+
+  # Wait for process to exit and then call exit handler
+  # If no exit detected, double the wait time up to a maximum of 2 seconds
+  #
+  # === Parameters
+  # pid(Integer):: Process identifier
+  # wait_time(Fixnum):: Amount of time to wait before checking status
+  # handlers(Array):: Handlers for status, stderr, stdout, and stdin
+  # options[:exit_handler](Symbol):: Handler to be called when process exits
+  # options[:target](Object):: Object initiating command execution
+  #
+  # === Return
+  # true:: Always return true
+  def self.handle_exit(pid, wait_time, handlers, options)
+    EM::Timer.new(wait_time) do
+      if value = Process.waitpid2(pid, Process::WNOHANG)
+        begin
+          ignored, status = value
+          options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
+        ensure
+          handlers.each { |h| h.drain_and_close }
         end
+      else
+        handle_exit(pid, [wait_time * 2, 1].min, handlers, options)
       end
     end
     true
