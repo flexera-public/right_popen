@@ -58,7 +58,13 @@ module RightScale
 
             status_r.close
             status_w.fcntl(Fcntl::F_SETFD, Fcntl::FD_CLOEXEC)
-            
+
+            ObjectSpace.each_object(IO) do |io|
+              if ![STDIN, STDOUT, STDERR].include?(io)
+            	  io.close unless io.closed?
+            	end
+            end
+
             if group = get_group
               ::Process.egid = group
               ::Process.gid = group
