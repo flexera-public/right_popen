@@ -58,6 +58,21 @@ module RightScale
       end
     end
 
+    it 'should close all IO handlers, except STDIN, STDOUT and STDERR' do
+      GC.start
+      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb'))}\" #{EXIT_STATUS}"
+      runner = Runner.new
+      status = runner.run_right_popen(command)
+      status.status.exitstatus.should == EXIT_STATUS
+      useless_handlers = 0
+      ObjectSpace.each_object(IO) do |io|
+        if ![STDIN, STDOUT, STDERR].include?(io)
+          useless_handlers += 1 unless io.closed?
+        end
+      end
+      useless_handlers.should == 0
+    end
+
     it 'should preserve the integrity of stdout when stderr is unavailable' do
       count = LARGE_OUTPUT_COUNTER
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_stdout_only.rb'))}\" #{count}"

@@ -96,6 +96,7 @@ module RightScale::RightPopen
           flexmock(::IO).should_receive(:select).with([@input], [@output], nil, 0.1).once.and_return([[], [@output], []])
           @write.should_receive(:call).with().once.and_return(value)
           value.should_receive(:[]).with(30..-1).and_return("")
+          value.should_receive("empty?").and_return(false)
           @output.should_receive(:write_nonblock).with(value).once.and_return(30)
           flexmock(::Process).should_receive(:waitpid2).with(42, ::Process::WNOHANG).once.and_return(nil)
           a.tick.should be_false
@@ -109,6 +110,8 @@ module RightScale::RightPopen
           @write.should_receive(:call).with().once.and_return(value)
           value.should_receive(:[]).with(30..-1).and_return(other)
           other.should_receive(:[]).with(20..-1).and_return("")
+          value.should_receive("empty?").and_return(false)
+          other.should_receive("empty?").and_return(false)
           @output.should_receive(:write_nonblock).with(value).once.and_return(30)
           @output.should_receive(:write_nonblock).with(other).once.and_return(20)
           flexmock(::Process).should_receive(:waitpid2).with(42, ::Process::WNOHANG).and_return(nil)

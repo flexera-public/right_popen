@@ -28,13 +28,13 @@ module RightScale
     class Process
       attr_reader :pid, :stdin, :stdout, :stderr, :status_fd
       attr_accessor :status
-      
+
       def initialize(parameters={})
         parameters[:locale] = true unless parameters.has_key?(:locale)
         @parameters = parameters
         @status_fd = nil
       end
-      
+
       def fork(cmd)
         @cmd = cmd
         stdin_r, stdin_w = IO.pipe
@@ -58,7 +58,13 @@ module RightScale
 
             status_r.close
             status_w.fcntl(Fcntl::F_SETFD, Fcntl::FD_CLOEXEC)
-            
+
+            ObjectSpace.each_object(IO) do |io|
+              if ![STDIN, STDOUT, STDERR, status_w].include?(io)
+            	  io.close unless io.closed?
+            	end
+            end
+
             if group = get_group
               ::Process.egid = group
               ::Process.gid = group
@@ -72,7 +78,7 @@ module RightScale
             Dir.chdir(@parameters[:directory]) if @parameters[:directory]
 
             ENV["LC_ALL"] = "C" if @parameters[:locale]
-          
+
             @parameters[:environment].each do |key,value|
               ENV[key.to_s] = value.to_s
             end if @parameters[:environment]
