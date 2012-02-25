@@ -33,7 +33,7 @@ module RightScale::RightPopen
       end
 
       it 'should handle utilities that expect input' do
-        out, err = Utilities::run("echo foo; read; echo bar >&2")
+        out, err = Utilities::run("echo foo; read unused_input; echo bar >&2")
         out.should == "foo\n"
         err.should == "bar\n"
       end
