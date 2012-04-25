@@ -166,12 +166,17 @@ module RightScale
   def self.handle_exit(pid, wait_time, handlers, options)
     EM::Timer.new(wait_time) do
       if value = Process.waitpid2(pid, Process::WNOHANG)
-        begin
-          ignored, status = value
-          options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
-        ensure
-          handlers.each { |h| h.drain_and_close }
+        ignored, status = value
+        first_exception = nil
+        handlers.each do |h|
+          begin
+            h.drain_and_close
+          rescue Exception => e
+            first_exception = e unless first_exception
+          end
         end
+        options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
+        raise first_exception if first_exception
       else
         handle_exit(pid, [wait_time * 2, 1].min, handlers, options)
       end
