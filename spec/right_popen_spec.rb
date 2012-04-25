@@ -1,5 +1,6 @@
 require File.expand_path(File.join(File.dirname(__FILE__), 'spec_helper'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'runner'))
+require 'stringio'
 
 module RightScale
   describe 'popen3' do
@@ -105,24 +106,62 @@ module RightScale
       status.pid.should > 0
     end
 
-    it 'should preserve the integrity of stdout and stderr despite interleaving' do
-      count = LARGE_OUTPUT_COUNTER
-      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{count}"
+    it 'should preserve interleaved output when yielding CPU on consumer thread' do
+      lines = 11
+      exit_code = 42
+      repeats = 5
+      force_yield = 0.1
+      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{lines} #{exit_code}"
+      runner = Runner.new
+      actual_output = StringIO.new
+      actual_error = StringIO.new
+      puts
+      stats = runner.run_right_popen(command, :repeats=>repeats, :force_yield=>force_yield) do |status|
+        status.status.exitstatus.should == exit_code
+        status.pid.should > 0
+        actual_output << status.output_text
+        actual_error << status.error_text
+        print '+'
+      end
+      puts
+      stats.size.should == repeats
+
+      expected_output = StringIO.new
+      repeats.times do
+        lines.times do |i|
+          expected_output << "stdout #{i}\n"
+        end
+      end
+      actual_output.string.should == expected_output.string
+
+      expected_error = StringIO.new
+      repeats.times do
+        lines.times do |i|
+          (expected_error << "stderr #{i}\n") if 0 == i % 10
+        end
+      end
+      actual_error.string.should == expected_error.string
+    end
+
+    it 'should preserve interleaved output when process is spewing rapidly' do
+      lines = LARGE_OUTPUT_COUNTER
+      exit_code = 99
+      command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{lines} #{exit_code}"
       runner = Runner.new
       status = runner.run_right_popen(command)
-      status.status.exitstatus.should == 99
+      status.status.exitstatus.should == exit_code
 
-      results = ''
-      count.times do |i|
-        results << "stdout #{i}\n"
+      expected_output = StringIO.new
+      lines.times do |i|
+        expected_output << "stdout #{i}\n"
       end
-      status.output_text.should == results
+      status.output_text.should == expected_output.string
 
-      results = ''
-      count.times do |i|
-        (results << "stderr #{i}\n") if 0 == i % 10
+      expected_error = StringIO.new
+      lines.times do |i|
+        (expected_error << "stderr #{i}\n") if 0 == i % 10
       end
-      status.error_text.should == results
+      status.error_text.should == expected_error.string
       status.pid.should > 0
     end
 
@@ -132,7 +171,7 @@ module RightScale
       status = runner.run_right_popen(command)
       status.status.exitstatus.should == 0
       status.output_text.should_not include('_test_')
-      status = runner.run_right_popen(command, :__test__ => '42')
+      status = runner.run_right_popen(command, :env=>{ :__test__ => '42' })
       status.status.exitstatus.should == 0
       status.output_text.should match(/^__test__=42$/)
       status.pid.should > 0
@@ -145,7 +184,7 @@ module RightScale
         ENV.each { |k, v| old_envs[k] = v }
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
         runner = Runner.new
-        status = runner.run_right_popen(command, :__test__ => '42')
+        status = runner.run_right_popen(command, :env=>{ :__test__ => '42' })
         status.status.exitstatus.should == 0
         status.output_text.should match(/^__test__=42$/)
         ENV.each { |k, v| old_envs[k].should == v }
@@ -162,7 +201,7 @@ module RightScale
       it 'should merge the PATH variable instead of overriding it' do
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
         runner = Runner.new
-        status = runner.run_right_popen(command, 'PATH' => "c:/bogus\\bin")
+        status = runner.run_right_popen(command, :env=>{ 'PATH' => "c:/bogus\\bin" })
         status.status.exitstatus.should == 0
         status.output_text.should include('c:\\bogus\\bin;')
         status.pid.should > 0
@@ -204,17 +243,19 @@ module RightScale
       pending 'Set environment variable TEST_LEAK to enable' unless ENV['TEST_LEAK']
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
       runner = Runner.new
-      status = runner.run_right_popen(command, nil, nil, REPEAT_TEST_COUNTER)
-      status.status.exitstatus.should == 0
-      status.output_text.should == STANDARD_MESSAGE + "\n"
-      status.error_text.should == ERROR_MESSAGE + "\n"
-      status.pid.should > 0
+      stats = runner.run_right_popen(command, :repeats=>REPEAT_TEST_COUNTER)
+      stats.each do |status|
+        status.status.exitstatus.should == 0
+        status.output_text.should == STANDARD_MESSAGE + "\n"
+        status.error_text.should == ERROR_MESSAGE + "\n"
+        status.pid.should > 0
+      end
     end
 
     it 'should pass input to child process' do
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'increment.rb'))}\""
       runner = Runner.new
-      status = runner.run_right_popen(command, nil, "42\n")
+      status = runner.run_right_popen(command, :input=>"42\n")
       status.status.exitstatus.should == 0
       status.output_text.should == "43\n"
       status.error_text.should be_empty
@@ -225,7 +266,7 @@ module RightScale
 	  pending 'not implemented for windows' if is_windows?
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
       runner = Runner.new
-      status = runner.run_right_popen(command, nil, nil)
+      status = runner.run_right_popen(command, :expect_timeout=>true, :timeout=>2)
       status.did_timeout.should be_true
       status.output_text.should be_empty
       status.error_text.should == "Closing stdout\n"
@@ -235,7 +276,7 @@ module RightScale
 	  pending 'not implemented for windows' if is_windows?
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
       runner = Runner.new
-      status = runner.run_right_popen(command, nil, nil)
+      status = runner.run_right_popen(command)
       status.status.exitstatus.should == 0
       status.did_timeout.should be_false
       status.output_text.should be_empty
