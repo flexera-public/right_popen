@@ -15,6 +15,7 @@ documentation.
 Also use the built-in issues tracker (https://github.com/rightscale/right_popen/issues)
 to report issues.
 
+Maintained by the RightScale Teal Team
 
 == USAGE
 
