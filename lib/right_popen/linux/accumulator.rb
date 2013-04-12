@@ -23,10 +23,13 @@
 
 module RightScale
   module RightPopen
+
+    # @deprecated this seems like test harness code smell, not production code
     class Accumulator
       READ_CHUNK_SIZE = 4096
 
       def initialize(process, inputs, read_callbacks, outputs, write_callbacks)
+        warn 'WARNING: RightScale::RightPopen::Accumulator is deprecated in lib and will be moved to spec'
         @process = process
         @inputs = inputs
         @outputs = outputs
@@ -45,10 +48,17 @@ module RightScale
         @status = nil
       end
 
-      def tick(sleep_time = 0.1)
-        return true unless @process.status.nil?
+      def status
+        unless @status
+          @status = ::Process.waitpid2(@process.pid, ::Process::WNOHANG)
+        end
+        @status
+      end
 
-        @process.status = status = ::Process.waitpid2(@process.pid, ::Process::WNOHANG)
+      def tick(sleep_time = 0.1)
+        return true unless @status.nil?
+
+        status
 
         inputs = @inputs.dup
         outputs = @outputs.dup
@@ -93,7 +103,7 @@ module RightScale
           end
         end unless ready.nil? || ready[1].nil?
 
-        return !@process.status.nil?
+        return !@status.nil?
       end
 
       def number_waiting_on
@@ -103,7 +113,7 @@ module RightScale
       def cleanup
         @inputs.each {|p| p.close unless p.closed? }
         @outputs.each {|p| p.close unless p.closed? }
-        @process.status = ::Process.waitpid2(@process.pid) if @process.status.nil?
+        @status = ::Process.waitpid2(@process.pid) if @status.nil?
       end
 
       def run_to_completion(sleep_time=0.1)

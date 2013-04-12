@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2009-2011 RightScale Inc
+# Copyright (c) 2009-2013 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,47 +21,15 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require 'rubygems'
-require 'eventmachine'
-require 'win32/process'
-
-require File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'win32', 'right_popen.so'))  # win32 native code
-
 module RightScale
 
-  # ensure uniqueness of handler to avoid confusion.
-  raise "#{StdInHandler.name} is already defined" if defined?(StdInHandler)
-
-  # Eventmachine callback handler for stdin stream
-  module StdInHandler
-
-    # === Parameters
-    # options[:input](String):: Input to be streamed into child process stdin
-    # stream_in(IO):: Standard input stream.
-    def initialize(options, stream_in)
-      @stream_in = stream_in
-      @input = options[:input]
-    end
-
-    # Eventmachine callback asking for more to write
-    # Send input and close stream in
-    def post_init
-      if @input
-        send_data(@input)
-        close_connection_after_writing
-        @input = nil
-      else
-        close_connection
-      end
-    end
-
-  end
-
-  # ensure uniqueness of handler to avoid confusion.
-  raise "#{StdOutHandler.name} is already defined" if defined?(StdOutHandler)
-
-  # Provides an eventmachine callback handler for the stdout stream.
-  module StdOutHandler
+  # helper classes for the win32 implementation of RightPopen.
+  #
+  # TEAL FIX: can't rename this module until/unless our mixlib-shellout
+  # implementation is changed to use our Process class instead of calling these
+  # methods directly. even better would be to stop using a custom version of
+  # mixlib-shellout.
+  module RightPopenEx
 
     # Quacks like Process::Status, which we cannot instantiate ourselves because
     # has no public new method. RightScale::popen3 needs this because the
@@ -101,164 +69,6 @@ module RightScale
       end
     end
 
-    # === Parameters
-    # options[:target](Object):: Object defining handler methods to be called.
-    # options[:stdout_handler](String):: Token for stdout handler method name.
-    # options[:exit_handler](String):: Token for exit handler method name.
-    # stderr_eventable(Connector):: EM object representing stderr handler.
-    # stream_out(IO):: Standard output stream.
-    # pid(Integer):: Child process ID.
-    def initialize(options, stderr_eventable, stream_out, pid)
-      @target = options[:target]
-      @stdout_handler = options[:stdout_handler]
-      @exit_handler = options[:exit_handler]
-      @stderr_eventable = stderr_eventable
-      @stream_out = stream_out
-      @pid = pid
-      @status = nil
-    end
-
-    # Callback from EM to asynchronously read the stdout stream. Note that this
-    # callback mechanism is deprecated after EM v0.12.8
-    def notify_readable
-      data = RightPopen.async_read(@stream_out)
-      receive_data(data) if (data && data.length > 0)
-      detach unless data
-    end
-
-    # Callback from EM to receive data, which we also use to handle the
-    # asynchronous data we read ourselves.
-    def receive_data(data)
-      @target.method(@stdout_handler).call(data) if @stdout_handler
-    end
-
-    # Override of Connection.get_status() for Windows implementation.
-    def get_status
-      unless @status
-        begin
-          @status = Status.new(@pid, Process.waitpid2(@pid)[1])
-        rescue Process::Error
-          # process is gone, which means we have no recourse to retrieve the
-          # actual exit code; let's be optimistic.
-          @status = Status.new(@pid, 0)
-        end
-      end
-      return @status
-    end
-
-    # Callback from EM to unbind.
-    def unbind
-    # We force the stderr watched handler to go away so that
-      # we don't end up with a broken pipe
-      @stderr_eventable.force_detach if @stderr_eventable
-      @target.method(@exit_handler).call(get_status) if @exit_handler
-      @stream_out.close
-    end
-  end
-
-  # ensure uniqueness of handler to avoid confusion.
-  raise "#{StdErrHandler.name} is already defined" if defined?(StdErrHandler)
-
-  # Provides an eventmachine callback handler for the stderr stream.
-  module StdErrHandler
-
-    # === Parameters
-    # options[:target](Object):: Object defining handler methods to be called.
-    # options[:stderr_handler](Symbol):: Token for stderr handler method name.
-    # stream_err(IO):: Standard error stream.
-    def initialize(options, stream_err)
-      @target = options[:target]
-      @stderr_handler = options[:stderr_handler]
-      @stream_err = stream_err
-      @unbound = false
-    end
-
-    # Callback from EM to asynchronously read the stderr stream. Note that this
-    # callback mechanism is deprecated after EM v0.12.8
-    def notify_readable
-      data = RightPopen.async_read(@stream_err)
-      receive_data(data) if (data && data.length > 0)
-      detach unless data
-    end
-
-    # Callback from EM to receive data, which we also use to handle the
-    # asynchronous data we read ourselves.
-    def receive_data(data)
-      @target.method(@stderr_handler).call(data)
-    end
-
-    # Callback from EM to unbind.
-    def unbind
-      @unbound = true
-      @stream_err.close
-    end
-
-    # Forces detachment of the stderr handler on EM's next tick.
-    def force_detach
-      # Use next tick to prevent issue in EM where descriptors list
-      # gets out-of-sync when calling detach in an unbind callback
-      EM.next_tick { detach unless @unbound }
-    end
-  end
-
-  # Creates a child process and connects event handlers to the standard output
-  # and error streams used by the created process. Connectors use named pipes
-  # and asynchronous I/O in the native Windows implementation.
-  #
-  # See RightScale.popen3
-  def self.popen3_imp(options, &block)
-    raise "EventMachine reactor must be started" unless EM.reactor_running?
-
-    # merge command string
-    unless options[:command].instance_of?(String)
-      options[:command] = options[:command].join(' ')
-    end
-
-    # merge and format environment strings, if necessary.
-    environment_hash = options[:environment] || {}
-    environment_strings = RightPopenEx.merge_environment(environment_hash)
-
-    # resolve command string from array, if necessary.
-    cmd = options[:command]
-    if cmd.kind_of?(Array)
-      escaped = []
-      cmd.flatten.each do |arg|
-        value = arg.to_s
-        escaped << (value.index(' ') ? "\"#{value}\"" : value)
-      end
-      cmd = escaped.join(" ")
-    end
-
-    # launch cmd and request asynchronous output.
-    mode = "t"
-    show_window = false
-    asynchronous_output = true
-    stream_in, stream_out, stream_err, pid = RightPopen.popen4(cmd, mode, show_window, asynchronous_output, environment_strings)
-
-    # close input immediately.
-    stream_in.close if options[:input].nil?
-
-    # attach handlers to event machine and let it monitor incoming data. the
-    # streams aren't used directly by the connectors except that they are closed
-    # on unbind.
-    stderr_eventable = EM.watch(stream_err, StdErrHandler, options, stream_err) { |c| c.notify_readable = true } if options[:stderr_handler]
-    EM.watch(stream_out, StdOutHandler, options, stderr_eventable, stream_out, pid) do |c|
-      c.notify_readable = true
-      options[:target].method(options[:pid_handler]).call(pid) if options[:pid_handler]
-    end
-    EM.attach(stream_in, StdInHandler, options, stream_in) if options[:input]
-
-    # note that control returns to the caller, but the launched cmd continues
-    # running and sends output to the handlers. the caller is not responsible
-    # for waiting for the process to terminate or closing streams as the
-    # watched eventables will handle this automagically. notification will be
-    # sent to the exit_handler on process termination.
-    true
-  end
-
-  protected
-
-  module RightPopenEx
     # Key class for case-insensitive hash insertion/lookup.
     class NoCaseKey
       # Internal key
@@ -490,4 +300,5 @@ module RightScale
     end
 
   end
+
 end

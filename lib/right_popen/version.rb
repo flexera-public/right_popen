@@ -1,5 +1,5 @@
 #--  -*- mode: ruby; encoding: utf-8 -*-
-# Copyright: Copyright (c) 2011 RightScale, Inc.
+# Copyright: Copyright (c) 2011-2013 RightScale, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -23,6 +23,6 @@
 
 module RightScale
   module RightPopen
-    VERSION = "1.0.21"
+    VERSION = "1.1.1"
   end
 end

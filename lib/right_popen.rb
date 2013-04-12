@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2009 RightScale Inc
+# Copyright (c) 2009-2013 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,46 +21,139 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-# RightScale.popen3 allows running external processes aynchronously
-# while still capturing their standard and error outputs.
-# It relies on EventMachine for most of its internal mechanisms.
+require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'target_proxy'))
 
-if RUBY_PLATFORM =~ /mswin/
-  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'win32', 'right_popen'))
-else
-  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'right_popen'))
+# TEAL FIX: this seems like test harness code smell, not production code. it
+# should be removed in next major revision. unfortunately we cannot remove these
+# require statements without breaking any code that depends on them.
+unless RUBY_PLATFORM =~ /mswin|mingw/
+  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'accumulator'))
+  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'utilities'))
 end
 
 module RightScale
 
-  # Spawn process to run given command asynchronously, hooking all three
-  # standard streams of the child process.
+  # see popen3_async for details.
   #
-  # Streams the command's stdout and stderr to the given handlers. Time-
-  # ordering of bytes sent to stdout and stderr is not preserved.
-  #
-  # Calls given exit handler upon command process termination, passing in the
-  # resulting Process::Status.
-  #
-  # All handlers must be methods exposed by the given target.
+  # @deprecated in favor of sync vs. async methods in RightPopen namespace.
   #
   # === Parameters
-  # options[:command](String or Array):: Command to execute, including any arguments as a single string or an array of command and arguments
-  # options[:environment](Hash):: Hash of environment variables values keyed by name
-  # options[:input](String):: Input string that will get streamed into child's process stdin
-  # options[:target](Object):: object defining handler methods to be called, optional (no handlers can be defined if not specified)
-  # options[:pid_handler](String):: PID notification handler method name, optional
-  # options[:stdout_handler](String):: Stdout handler method name, optional
-  # options[:stderr_handler](String):: Stderr handler method name, optional
-  # options[:exit_handler](String):: Exit handler method name, optional
+  # @param [Hash] options for execution
   #
   # === Returns
-  # true:: always true
+  # @return [TrueClass] always true
   def self.popen3(options)
-    raise "EventMachine reactor must be started" unless EM.reactor_running?
-    raise "Missing command" unless options[:command]
-    raise "Missing target" unless options[:target] || !options[:stdout_handler] && !options[:stderr_handler] && !options[:exit_handler] && !options[:pid_handler]
-    return RightScale.popen3_imp(options)
+    warn 'WARNING: RightScale.popen3 is deprecated in favor of RightScale::RightPopen.popen3_async'
+    options = options.dup
+    cmd = options.dup.delete(:command)
+    raise ::ArgumentError.new("Missing command") unless cmd
+    ::RightScale::RightPopen.popen3_async(options[:command], options)
   end
 
+  module RightPopen
+
+    # see popen3_async for details.
+    DEFAULT_POPEN3_OPTIONS = {
+      :environment      => nil,
+      :exit_handler     => nil,
+      :group            => nil,
+      :inherit_io       => false,
+      :input            => nil,
+      :locale           => true,
+      :pid_handler      => nil,
+      :size_limit_bytes => nil,
+      :stderr_handler   => nil,
+      :stdout_handler   => nil,
+      :target           => nil,
+      :timeout_seconds  => nil,
+      :umask            => nil,
+      :user             => nil,
+      :watch_directory  => nil,
+    }
+
+    # Loads the specified implementation.
+    #
+    # === Parameters
+    # @param [Symbol|String] synchronicity to load
+    #
+    # === Return
+    # @return [TrueClass] always true
+    def self.require_popen3_impl(synchronicity)
+      case RUBY_PLATFORM
+      when /mswin/
+        platform = 'win32'
+      when /mingw/
+        platform = 'mingw'
+      else
+        platform = 'linux'
+      end
+      require ::File.expand_path(::File.join(::File.dirname(__FILE__), 'right_popen', platform, synchronicity.to_s))
+    end
+
+    # Spawns a process to run given command synchronously. This is similar to
+    # the Ruby backtick but also supports streaming I/O, process watching, etc.
+    # Does not require any evented library to use.
+    #
+    # Streams the command's stdout and stderr to the given handlers. Time-
+    # ordering of bytes sent to stdout and stderr is not preserved.
+    #
+    # Calls given exit handler upon command process termination, passing in the
+    # resulting Process::Status.
+    #
+    # All handlers must be methods exposed by the given target.
+    #
+    # === Parameters
+    # @param [Hash] options see popen3_async for details
+    #
+    # === Returns
+    # @return [TrueClass] always true
+    def self.popen3_sync(cmd, options)
+      options = DEFAULT_POPEN3_OPTIONS.dup.merge(options)
+      require_popen3_impl(:popen3_sync)
+      ::RightScale::RightPopen.popen3_sync_impl(
+        cmd, ::RightScale::RightPopen::TargetProxy.new(options), options)
+    end
+
+    # Spawns a process to run given command asynchronously, hooking all three
+    # standard streams of the child process. Implementation requires the
+    # eventmachine gem.
+    #
+    # Streams the command's stdout and stderr to the given handlers. Time-
+    # ordering of bytes sent to stdout and stderr is not preserved.
+    #
+    # Calls given exit handler upon command process termination, passing in the
+    # resulting Process::Status.
+    #
+    # All handlers must be methods exposed by the given target.
+    #
+    # === Parameters
+    # @param [Hash] options for execution
+    # @option options [Hash] :environment variables values keyed by name
+    # @option options [Symbol] :exit_handler target method called on exit
+    # @option options [Integer|String] :group uid for forked process (linux only)
+    # @option options [TrueClass|FalseClass] :inherit_io set to true to share all IO objects with forked process or false to close shared IO objects (default) (linux only)
+    # @option options [String] :input string that will get streamed into child's process stdin
+    # @option options [TrueClass|FalseClass] :locale set to true to export LC_ALL=C in the forked environment (default) or false to use default locale (linux only)
+    # @option options [Symbol] :pid_handler target method called with process ID (PID)
+    # @option options [Integer] :size_limit_bytes for total size of watched directory after which child process will be interrupted
+    # @option options [Symbol] :stderr_handler target method called as error text is received
+    # @option options [Symbol] :stdout_handler target method called as output text is received
+    # @option options [Object] :target object defining handler methods to be called (no handlers can be defined if not specified)
+    # @option options [Numeric] :timeout_seconds after which child process will be interrupted
+    # @option options [Integer|String] :umask for files created by process (linux only)
+    # @option options [Integer|String] :user uid for forked process (linux only)
+    # @option options [String] :watch_directory to monitor for child process writing files
+    #
+    # === Returns
+    # @return [TrueClass] always true
+    def self.popen3_async(cmd, options)
+      options = DEFAULT_POPEN3_OPTIONS.dup.merge(options)
+      require_popen3_impl(:popen3_async)
+      unless ::EM.reactor_running?
+        raise ::ArgumentError, "EventMachine reactor must be running."
+      end
+      ::RightScale::RightPopen.popen3_async_impl(
+        cmd, ::RightScale::RightPopen::TargetProxy.new(options), options)
+    end
+  end
 end

@@ -1,17 +1,16 @@
 GIT
   remote: git@github.com:rightscale/rightscale-eventmachine.git
-  revision: 98cb33188fdab4c5cd5544ef298c547839fe783c
+  revision: 7bb4310efde3ea4c735c3a962cd8a38d366d64d2
   specs:
-    eventmachine (0.12.11)
+    eventmachine (1.0.0.2)
 
 PATH
   remote: .
   specs:
-    right_popen (1.0.21)
-      eventmachine (>= 0.12.11)
+    right_popen (1.1.1)
 
 GEM
-  remote: http://rubygems.org/
+  remote: https://rubygems.org/
   specs:
     flexmock (0.8.11)
     rake (0.8.7)
@@ -21,7 +20,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  eventmachine (>= 0.12.11)!
+  eventmachine (>= 1.0.0.2)!
   flexmock
   rake (~> 0.8.7)
   right_popen!

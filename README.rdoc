@@ -48,13 +48,14 @@ Maintained by the RightScale Teal Team
   EM.run do
     EM.next_tick do
       command = "ruby -e \"puts 'some stdout text'; $stderr.puts 'some stderr text'\; exit 99\""
-      RightScale.popen3(:command        => command,
-                        :target         => self,
-                        :environment    => nil,
-                        :pid_handler    => :on_pid,
-                        :stdout_handler => :on_read_stdout,
-                        :stderr_handler => :on_read_stderr,
-                        :exit_handler   => :on_exit)
+      RightScale::RightPopen.popen3_async(
+        command,
+        :target         => self,
+        :environment    => nil,
+        :pid_handler    => :on_pid,
+        :stdout_handler => :on_read_stdout,
+        :stderr_handler => :on_read_stderr,
+        :exit_handler   => :on_exit)
     end
     timer = EM::PeriodicTimer.new(0.1) do
       if @exit_status
@@ -110,7 +111,7 @@ the RightPopen tests:
 
 <b>RightPopen</b>
 
-Copyright:: Copyright (c) 2010 RightScale, Inc. 
+Copyright:: Copyright (c) 2010-2013 RightScale, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

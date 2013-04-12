@@ -26,6 +26,8 @@ require File.expand_path(File.join(File.dirname(__FILE__), "accumulator"))
 
 module RightScale
   module RightPopen
+
+    # @deprecated this seems like test harness code smell, not production code
     module Utilities
       module_function
 
@@ -77,14 +79,15 @@ module RightScale
       alias_method :spawn, :run_collecting_output
 
       def run_with_blocks(cmd, stdin_block, stdout_block, stderr_block, parameters={})
+        warn 'WARNING: RightScale::RightPopen::Utilities are deprecated in lib and will be moved to spec'
         process = Process.new(parameters)
-        process.fork(cmd)
+        process.spawn(cmd, ::RightScale::RightPopen::TargetProxy.new(parameters))
         process.wait_for_exec
         a = Accumulator.new(process,
                             [process.stdout, process.stderr], [stdout_block, stderr_block],
                             [process.stdin], [stdin_block])
         a.run_to_completion
-        process.status[1]
+        a.status[1]
       end
     end
   end

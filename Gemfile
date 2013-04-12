@@ -1,8 +1,8 @@
-source :rubygems
+source 'https://rubygems.org'
 
 unless RUBY_PLATFORM =~ /mswin/
 
-  gem "eventmachine", ">=0.12.11" ,:git => "git@github.com:rightscale/rightscale-eventmachine.git"
+  gem "eventmachine", ">=1.0.0.2" ,:git => "git@github.com:rightscale/rightscale-eventmachine.git"
 
   gemspec
 
@@ -26,7 +26,7 @@ else
   source 'http://s3.amazonaws.com/rightscale_rightlink_gems_dev'
 
   gem "rake",           "0.8.7"
-  gem "eventmachine",   "0.12.11.6"
+  gem "eventmachine",   "1.0.0.2"
   gem "rspec",          "~> 1.3"
   gem "flexmock",       "~> 0.8"
   gem "win32-api",      "1.4.5"
