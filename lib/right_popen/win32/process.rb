@@ -221,7 +221,6 @@ module RightScale
             end
             @next_kill_signal ||= 'INT'
             result = ::Process.kill(@next_kill_signal, @pid) rescue nil
-            break unless result
             case @next_kill_signal
             when 'INT'
               @next_kill_signal = 'TERM'
@@ -234,12 +233,12 @@ module RightScale
               @next_kill_signal = :abandon_child
               @kill_time = Time.now + 3 # more seconds until abandoning child
             end
-            if result.empty?
-              # last kill attempt disallowed; go around again with escalation.
-              @kill_time = nil
-            else
+            if result && !result.empty?
               @interrupted = true  # short circuit any outer state machine to retry interrupt
               break
+            else
+              # last kill attempt disallowed; go around again with escalation.
+              @kill_time = nil
             end
           end
         end
