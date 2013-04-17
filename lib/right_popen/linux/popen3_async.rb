@@ -154,8 +154,15 @@ module RightScale::RightPopen
   # true:: Always return true
   def self.watch_process(process, wait_time, target, handlers)
     ::EM::Timer.new(wait_time) do
-      if value = ::Process.waitpid2(process.pid, ::Process::WNOHANG)
-        ignored, status = value
+      if process.alive?
+        if process.timer_expired? || process.size_limit_exceeded?
+          process.interrupt
+        else
+          # cannot abandon async watch; callback needs to interrupt in this case
+          target.watch_handler(self)
+        end
+        watch_process(process, [wait_time * 2, 1].min, target, handlers)
+      else
         first_exception = nil
         handlers.each do |h|
           begin
@@ -164,25 +171,11 @@ module RightScale::RightPopen
             first_exception = e unless first_exception
           end
         end
-
-        # an interrupted process can have a nil exitstatus; create a new status
-        # so caller can expect an integer in all cases.
-        unless status && status.exitstatus
-          exitstatus = process.interrupted? ? 1 : 0
-          status = ::RightScale::RightPopen::ProcessStatus.new(process.pid, exitstatus)
-        end
+        process.wait_for_exit_status
         target.timeout_handler if process.timer_expired?
         target.size_limit_handler if process.size_limit_exceeded?
-        target.exit_handler(status)
+        target.exit_handler(process.status)
         raise first_exception if first_exception
-      else
-        if process.timer_expired? || process.size_limit_exceeded?
-          process.interrupt
-        else
-          # cannot abandon async watch; callback needs to interrupt in this case
-          target.watch_handler(self)
-        end
-        watch_process(process, [wait_time * 2, 1].min, target, handlers)
       end
     end
     true

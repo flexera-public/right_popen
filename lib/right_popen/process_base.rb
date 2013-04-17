@@ -29,7 +29,7 @@ module RightScale
 
       class ProcessError < Exception; end
 
-      attr_reader :pid, :stdin, :stdout, :stderr, :status_fd
+      attr_reader :pid, :stdin, :stdout, :stderr, :status_fd, :status
 
       # === Parameters
       # @param [Hash] options see RightScale.popen3_async for details
@@ -39,7 +39,6 @@ module RightScale
         @stdout = nil
         @stderr = nil
         @status_fd = nil
-        @alive = false
         @interrupted = false
         @pid = nil
         @stop_time = nil
@@ -47,6 +46,7 @@ module RightScale
         @size_limit_bytes = nil
         @cmd = nil
         @target = nil
+        @status = nil
         @needs_watching = !!(
           @options[:timeout_seconds] ||
           @options[:size_limit_bytes] ||
@@ -114,7 +114,8 @@ module RightScale
         @target = target
         @kill_time = nil
         @next_kill_signal = nil
-        @alive = false
+        @pid = nil
+        @status = nil
 
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
@@ -126,21 +127,110 @@ module RightScale
                       nil
       end
 
+      # Monitors I/O from child process and directly notifies target of any
+      # events. Blocks until child exits.
+      #
+      # === Return
+      # @return [TrueClass] always true
+      def sync_exit_with_target
+        # early handling in case caller wants to stream to/from the pipes
+        # directly (as in a classic popen3/4 scenario).
+        begin
+          @target.pid_handler(@pid)
+          if input_text = @options[:input]
+            @stdin.write(input_text)
+          end
+
+          # sync watch_handler has the option to abandon watch as soon as child
+          # process comes alive and before streaming any output.
+          if @target.watch_handler(self)
+            # can close stdin if not returning control to caller.
+            @stdin.close rescue nil
+          else
+            # caller is reponsible for draining and closing all pipes.
+            return true
+          end
+        rescue
+          safe_close_io
+          raise
+        end
+
+        # note that calling IO.select on pipes which have already had all
+        # of their output consumed can cause segfault (in Ubuntu?) so it is
+        # important to keep track of when all I/O has been consumed.
+        channels_to_finish = {
+          :stdout_handler => @stdout,
+          :stderr_handler => @stderr
+        }
+        channels_to_finish[:status_fd] = @status_fd if @status_fd
+        abandon = false
+        last_exception = nil
+        begin
+          while !channels_to_finish.empty?
+            channels_to_watch = channels_to_finish.values.dup
+            ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
+            dead = !alive?
+            if ready
+              ready.first.each do |channel|
+                key = channels_to_finish.find { |k, v| v == channel }.first
+                data = dead ? channel.gets(nil) : channel.gets
+                if data
+                  if key == :status_fd
+                    last_exception = ::Marshal.load(data)
+                  else
+                    @target.method(key).call(data)
+                  end
+                else
+                  # nothing on channel indicates EOF
+                  channels_to_finish.delete(key)
+                end
+              end
+            end
+            if dead
+              channels_to_finish = {}
+            elsif (interrupted? || timer_expired? || size_limit_exceeded?)
+              interrupt
+            elsif abandon = !@target.watch_handler(self)
+              return true  # bypass any remaining callbacks
+            end
+          end
+          wait_for_exit_status
+          @target.timeout_handler if timer_expired?
+          @target.size_limit_handler if size_limit_exceeded?
+          @target.exit_handler(@status)
+
+          # re-raise exception from fork, if any.
+          case last_exception
+          when nil
+            # all good
+          when ::Exception
+            raise last_exception
+          else
+            raise "Unknown failure: saw #{last_exception.inspect} on status channel."
+          end
+        ensure
+          # abandon will not close I/O objects; caller takes responsibility via
+          # process object passed to watch_handler. if anyone calls interrupt
+          # then close I/O regardless of abandon to try to force child to die.
+          safe_close_io if !abandon || interrupted?
+        end
+        true
+      end
+
+      # blocks waiting for process exit status.
+      #
+      # === Return
+      # @return [ProcessStatus] exit status
+      def wait_for_exit_status
+        raise NotImplementedError, 'Must be overridden'
+      end
+
       # Interrupts the running process (without abandoning watch) in increasing
       # degrees of signalled severity.
       #
       # === Return
       # @return [TrueClass] always true
       def interrupt
-        raise NotImplementedError, 'Must be overridden'
-      end
-
-      # Creates a thread to monitor I/O from child process and notifies target
-      # of any events until child exits.
-      #
-      # === Return
-      # @return [TrueClass] always true
-      def sync_exit_with_target
         raise NotImplementedError, 'Must be overridden'
       end
 

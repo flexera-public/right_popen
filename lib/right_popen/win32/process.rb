@@ -41,17 +41,17 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true if running
       def alive?
-        # note that ::Process.kill(0, @pid) is unreliable from win32-process gem
-        # because it can returns a false positive if called before and then
-        # after process termination.
-        if @alive
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          # note that ::Process.kill(0, pid) is unreliable from win32-process
+          # gem because it can returns a false positive if called before and
+          # then after process termination.
           handle = ::Windows::Process::OpenProcess.call(
             desired_access = ::Windows::Process::PROCESS_ALL_ACCESS,
             inherit_handle = 0,
             @pid)
-          if handle == ::Windows::Handle::INVALID_HANDLE_VALUE
-            @alive = false
-          else
+          alive = false
+          if handle != ::Windows::Handle::INVALID_HANDLE_VALUE
             begin
               # immediate check (zero milliseconds) to see if process handle is
               # signalled (i.e. terminated). the process remains signalled after
@@ -60,13 +60,14 @@ module RightScale
               result = ::Windows::Synchronize::WaitForSingleObject.call(
                 handle,
                 milliseconds = 0)
-              @alive = result == ::Windows::Synchronize::WAIT_TIMEOUT
+              alive = result == ::Windows::Synchronize::WAIT_TIMEOUT
             ensure
               ::Windows::Handle::CloseHandle.call(handle)
             end
           end
+          wait_for_exit_status unless alive
         end
-        @alive
+        @status.nil?
       end
 
       # spawns a child process using given command and handler target in a
@@ -116,7 +117,6 @@ module RightScale
             asynchronous_output = true,
             environment_strings)
         end
-        @alive = true
         true
       end
 
@@ -125,84 +125,26 @@ module RightScale
       # === Return
       # @return [ProcessStatus] exit status
       def wait_for_exit_status
-        exitstatus = nil
-        begin
-          # note that win32-process gem doesn't support the no-hang parameter
-          # and returns exit code instead of status.
-          ignored, exitstatus = ::Process.waitpid2(@pid)
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          exitstatus = nil
+          begin
+            # note that win32-process gem doesn't support the no-hang parameter
+            # and returns exit code instead of status.
+            ignored, exitstatus = ::Process.waitpid2(@pid)
+          rescue Process::Error
+            # process is gone, which means we have no recourse to retrieve the
+            # actual exit code.
+          ensure
+            exitstatus = 0 unless exitstatus
+          end
 
-          # an interrupted process can still return zero exit status; if we had
-          # to interrupt it then don't treat it as successful.
+          # an interrupted process can still return zero exit status; if we
+          # interrupted it then don't treat it as successful.
           exitstatus = 1 if 0 == exitstatus && interrupted?
-        rescue Process::Error
-          # process is gone, which means we have no recourse to retrieve the
-          # actual exit code; let's be optimistic unless we interrupted.
-          exitstatus = interrupted? ? 1 : 0
+          @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus)
         end
-        @alive = false
-        ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus)
-      end
-
-      # Monitors I/O from child process and directly notifies target of any
-      # events. Blocks until child exits.
-      #
-      # === Return
-      # @return [TrueClass] always true
-      def sync_exit_with_target
-        # note that calling IO.select on pipes which have already had all
-        # of their output consumed can cause segfault (in Ubuntu?) so it is
-        # important to keep track of when all I/O has been consumed.
-        channels_to_finish = {
-          :stdout_handler => @stdout,
-          :stderr_handler => @stderr
-        }
-        last_exception = nil
-        begin
-          @target.pid_handler(@pid)
-          if input_text = @options[:input]
-            @stdin.write(input_text)
-          end
-        ensure
-          @stdin.close rescue nil
-        end
-
-        abandon = false
-        begin
-          while !channels_to_finish.empty?
-            channels_to_watch = channels_to_finish.values.dup
-            ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
-            dead = !alive?
-            if ready
-              ready.first.each do |channel|
-                key = channels_to_finish.find { |k, v| v == channel }.first
-                line = dead ? channel.gets(nil) : channel.gets
-                if line
-                  @target.method(key).call(line)
-                else
-                  # nothing on channel indicates EOF
-                  channels_to_finish.delete(key)
-                end
-              end
-            end
-            if dead
-              channels_to_finish = {}
-            elsif (interrupted? || timer_expired? || size_limit_exceeded?)
-              interrupt
-            elsif abandon = !@target.watch_handler(self)
-              return true  # bypass any remaining callbacks
-            end
-          end
-          status = wait_for_exit_status
-          @target.timeout_handler if timer_expired?
-          @target.size_limit_handler if size_limit_exceeded?
-          @target.exit_handler(status)
-        ensure
-          # abandon will not close I/O objects; caller takes responsibility via
-          # process object passed to watch_handler. if anyone calls interrupt
-          # then close I/O regardless of abandon to try to force child to die.
-          safe_close_io if !abandon || interrupted?
-        end
-        true
+        @status
       end
 
       # Interrupts the running process (without abandoning watch) in increasing

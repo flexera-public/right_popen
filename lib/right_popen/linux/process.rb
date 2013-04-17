@@ -39,8 +39,40 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true if running
       def alive?
-        @alive = !!(::Process.kill(0, @pid) rescue nil) if @alive
-        @alive
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          begin
+            ignored, status = ::Process.waitpid2(@pid, ::Process::WNOHANG)
+            @status = status
+          rescue
+            wait_for_exit_status
+          end
+        end
+        @status.nil?
+      end
+
+      # blocks waiting for process exit status.
+      #
+      # === Return
+      # @return [ProcessStatus] exit status
+      def wait_for_exit_status
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          begin
+            ignored, status = ::Process.waitpid2(@pid)
+            @status = status
+          rescue
+            # ignored
+          end
+        end
+
+        # an interrupted process can have a nil exitstatus; create a new status
+        # in this case so caller can always expect an integer exitstatus.
+        if @status.nil? || @status.exitstatus.nil?
+          exitstatus = interrupted? ? 1 : 0
+          @status = ::RightScale::RightPopen::ProcessStatus.new(pid, exitstatus)
+        end
+        @status
       end
 
       # spawns (forks) a child process using given command and handler target in
@@ -135,94 +167,6 @@ module RightScale
         @stdout = stdout_r
         @stderr = stderr_r
         @status_fd = status_r
-        @alive = true
-        true
-      end
-
-      # Monitors I/O from child process and directly notifies target of any
-      # events. Blocks until child exits.
-      #
-      # === Return
-      # @return [TrueClass] always true
-      def sync_exit_with_target
-        # note that calling IO.select on pipes which have already had all
-        # of their output consumed can cause segfault (in Ubuntu?) so it is
-        # important to keep track of when all I/O has been consumed.
-        channels_to_finish = {
-          :stdout_handler => @stdout,
-          :stderr_handler => @stderr,
-          :status_fd      => @status_fd
-        }
-        status = nil
-        last_exception = nil
-        begin
-          @target.pid_handler(@pid)
-          if input_text = @options[:input]
-            @stdin.write(input_text)
-          end
-        ensure
-          @stdin.close rescue nil
-        end
-
-        abandon = false
-        begin
-          while !channels_to_finish.empty?
-            channels_to_watch = channels_to_finish.values.dup
-            ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
-            ignored, status = ::Process.waitpid2(@pid, ::Process::WNOHANG)
-            if ready
-              ready.first.each do |channel|
-                key = channels_to_finish.find { |k, v| v == channel }.first
-                line = status ? channel.gets(nil) : channel.gets
-                if line
-                  if key == :status_fd
-                    last_exception = ::Marshal.load(@data)
-                  else
-                    @target.method(key).call(line)
-                  end
-                else
-                  # nothing on channel indicates EOF
-                  channels_to_finish.delete(key)
-                end
-              end
-            end
-            if status
-              channels_to_finish = {}
-            elsif (interrupted? || timer_expired? || size_limit_exceeded?)
-              interrupt
-            elsif abandon = !@target.watch_handler(self)
-              return true  # bypass any remaining callbacks
-            end
-          end
-          unless status
-            ignored, status = ::Process.waitpid2(pid) rescue [nil, nil]
-          end
-
-          # an interrupted process can have a nil exitstatus; create a new status
-          # so caller can expect an integer in all cases.
-          unless status && status.exitstatus
-            exitstatus = interrupted? ? 1 : 0
-            status = ::RightScale::RightPopen::ProcessStatus.new(pid, exitstatus)
-          end
-          @target.timeout_handler if timer_expired?
-          @target.size_limit_handler if size_limit_exceeded?
-          @target.exit_handler(status)
-
-          # re-raise exception from fork, if any.
-          case last_exception
-          when nil
-            # all good
-          when ::Exception
-            raise last_exception
-          else
-            raise "Unknown failure: saw #{last_exception.inspect} on status channel."
-          end
-        ensure
-          # abandon will not close I/O objects; caller takes responsibility via
-          # process object passed to watch_handler. if anyone calls interrupt
-          # then close I/O regardless of abandon to try to force child to die.
-          safe_close_io if !abandon || interrupted?
-        end
         true
       end
 
