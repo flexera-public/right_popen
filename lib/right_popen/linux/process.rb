@@ -30,8 +30,6 @@ module RightScale
   module RightPopen
     class Process < ProcessBase
 
-      attr_reader :status_fd
-
       def initialize(options={})
         super(options)
       end

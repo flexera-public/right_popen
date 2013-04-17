@@ -29,7 +29,7 @@ module RightScale
 
       class ProcessError < Exception; end
 
-      attr_reader :stdin, :stdout, :stderr, :pid
+      attr_reader :pid, :stdin, :stdout, :stderr, :status_fd
 
       # === Parameters
       # @param [Hash] options see RightScale.popen3_async for details
