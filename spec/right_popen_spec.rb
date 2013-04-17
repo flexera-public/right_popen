@@ -145,7 +145,7 @@ describe 'RightScale::RightPopen' do
       lines = LARGE_OUTPUT_COUNTER
       exit_code = 99
       command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{lines} #{exit_code}"
-      status = runner.run_right_popen3(synchronicity, command)
+      status = runner.run_right_popen3(synchronicity, command, :timeout=>10)
       status.status.exitstatus.should == exit_code
 
       expected_output = StringIO.new
