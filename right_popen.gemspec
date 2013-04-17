@@ -48,7 +48,7 @@ EOF
   spec.files = candidates.sort!
 
   # Current implementation supports >= 0.12.11
-  spec.add_runtime_dependency(%q<eventmachine>, [">= 0.12.11"])
+  spec.add_development_dependency(%q<eventmachine>, [">= 0.12.11"])
   if is_windows
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
   end

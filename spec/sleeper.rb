@@ -1,5 +1,5 @@
 #--  -*- mode: ruby; encoding: utf-8 -*-
-# Copyright: Copyright (c) 2011-2013 RightScale, Inc.
+# Copyright: Copyright (c) 2011 RightScale, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,8 +21,15 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-module RightScale
-  module RightPopen
-    VERSION = "1.1.1"
-  end
+REPEATS = (ARGV[0] || '4').to_i
+
+STDOUT.sync = true
+STDERR.sync = true
+REPEATS.times do |i|
+  STDOUT.puts "To sleep... #{i}"
+  STDERR.puts "Perchance to dream... #{i}"
+  sleep 1
 end
+STDOUT.puts "The sleeper must awaken."
+
+exit 0
