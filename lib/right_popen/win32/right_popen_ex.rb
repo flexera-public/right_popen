@@ -24,14 +24,9 @@
 module RightScale
 
   # helper classes for the win32 implementation of RightPopen.
-  #
-  # TEAL FIX: can't rename this module until/unless our mixlib-shellout
-  # implementation is changed to use our Process class instead of calling these
-  # methods directly. even better would be to stop using a custom version of
-  # mixlib-shellout.
   module RightPopenEx
 
-    # @deprecated because it is not specific to win32 platform.
+    # @deprecated because custom status is not specific to win32 platform.
     class Status < ::RightScale::RightPopen::ProcessStatus
 
       def initialize(pid, exitstatus)

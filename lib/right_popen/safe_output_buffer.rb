@@ -31,7 +31,7 @@ module RightScale
     # interesting bits of data (start of lines, last in output).
     class SafeOutputBuffer
 
-      # note utf-8 encodings for the Unuicode elipsis character are inconsistent
+      # note utf-8 encodings for the Unicode elipsis character are inconsistent
       # between ruby platforms (Windows vs Linux) and versions (1.8 vs 1.9).
       ELLIPSIS = '...'
 
@@ -59,6 +59,9 @@ module RightScale
       # === Parameters
       # @param [Object] data of any kind
       def safe_buffer_data(data)
+        # note that the chomping ensures that the exact output cannot be
+        # preserved but the truncation would tend to eliminate trailing newlines
+        # in any case. if you want exact output then don't use safe buffering.
         data = data.to_s.chomp
         if @buffer.size >= @max_line_count
           @buffer.shift
