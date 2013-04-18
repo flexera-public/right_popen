@@ -141,9 +141,12 @@ module RightScale
 
             ::Dir.chdir(@options[:directory]) if @options[:directory]
 
-            environment_hash = {}.merge(@options[:environment] || {})
+            environment_hash = {}
             environment_hash['LC_ALL'] = 'C' if @options[:locale]
-            environment_hash.each { |key, value| ::ENV[key.to_s] = value.to_s }
+            environment_hash.merge!(@options[:environment]) if @options[:environment]
+            environment_hash.each do |key, value|
+              ::ENV[key.to_s] = value.to_s if value
+            end
 
             if cmd.kind_of?(Array)
               cmd = cmd.map { |c| c.to_s } #exec only likes string arguments
