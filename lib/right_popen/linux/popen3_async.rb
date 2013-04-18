@@ -136,6 +136,14 @@ module RightScale::RightPopen
       handlers << ::EM.attach(process.stdin, ::RightScale::RightPopen::InputHandler, process.stdin, options[:input])
 
       target.pid_handler(process.pid)
+
+      # initial watch callback.
+      #
+      # note that we cannot abandon async watch; callback needs to interrupt
+      # in this case
+      target.watch_handler(process)
+
+      # periodic watcher.
       watch_process(process, 0.1, target, handlers)
     end
     true

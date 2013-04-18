@@ -180,13 +180,23 @@ module RightScale::RightPopen
       ::EM.watch(process.stdout, ::RightScale::RightPopen::StdOutHandler, process, target, stderr_eventable, process.stdout) do |c|
         c.notify_readable = true
         target.pid_handler(process.pid)
+
+        # initial watch callback.
+        #
+        # note that we cannot abandon async watch; callback needs to interrupt
+        # in this case
+        target.watch_handler(process)
       end
       if options[:input]
         ::EM.attach(process.stdin, ::RightScale::RightPopen::StdInHandler, options, process.stdin)
       end
 
-      # create a watcher only if needed in the win32 async case because the
-      # exit handler is tied to EM eventable detachment.
+      # create a periodic watcher only if needed in the win32 async case because
+      # the exit handler is tied to EM eventable detachment.
+      #
+      # TEAL FIX: does this logic need to differ from Linux or can they share
+      # the same code? they probably differ because the mswin32 implementation
+      # of EM stopped many versions back.
       if process.needs_watching?
         ::EM.next_tick do
           watch_process(process, 0.1, target)
