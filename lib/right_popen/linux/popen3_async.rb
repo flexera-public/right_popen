@@ -159,7 +159,7 @@ module RightScale::RightPopen
           process.interrupt
         else
           # cannot abandon async watch; callback needs to interrupt in this case
-          target.watch_handler(self)
+          target.watch_handler(process)
         end
         watch_process(process, [wait_time * 2, 1].min, target, handlers)
       else
