@@ -39,7 +39,7 @@ module RightScale
         @stdout = nil
         @stderr = nil
         @status_fd = nil
-        @interrupted = false
+        @last_interrupt = nil
         @pid = nil
         @stop_time = nil
         @watch_directory = nil
@@ -96,7 +96,7 @@ module RightScale
       end
 
       # @return [TrueClass|FalseClass] interrupted as true if child process was interrupted by watcher
-      def interrupted?; !!@interrupted; end
+      def interrupted?; !!@last_interrupt; end
 
       # spawns a child process using given command and handler target in a
       # platform-independant manner.
@@ -113,7 +113,6 @@ module RightScale
         @cmd = cmd
         @target = target
         @kill_time = nil
-        @next_kill_signal = nil
         @pid = nil
         @status = nil
 
@@ -225,13 +224,42 @@ module RightScale
         raise NotImplementedError, 'Must be overridden'
       end
 
+      # @return [Array] escalating termination signals for this platform
+      def signals_for_interrupt
+        raise NotImplementedError, 'Must be overridden'
+      end
+
       # Interrupts the running process (without abandoning watch) in increasing
       # degrees of signalled severity.
       #
       # === Return
-      # @return [TrueClass] always true
+      # @return [TrueClass|FalseClass] true if process was alive and interrupted, false if dead before (first) interrupt
       def interrupt
-        raise NotImplementedError, 'Must be overridden'
+        while alive?
+          if !@kill_time || Time.now >= @kill_time
+            # soft then hard interrupt (assumed to be called periodically until
+            # process is gone).
+            sigs = signals_for_interrupt
+            if @last_interrupt
+              last_index = sigs.index(@last_interrupt)
+              next_interrupt = sigs[last_index + 1]
+            else
+              next_interrupt = sigs.first
+            end
+            unless next_interrupt
+              raise ::RightScale::RightPopen::ProcessBase::ProcessError
+                    'Unable to kill child process'
+            end
+            @last_interrupt = next_interrupt
+
+            result = ::Process.kill(next_interrupt, @pid) rescue nil
+            if result
+              @kill_time = Time.now + 3 # more seconds until next attempt
+              break
+            end
+          end
+        end
+        interrupted?
       end
 
       # Safely closes any open I/O objects associated with this process.

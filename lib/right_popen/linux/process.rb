@@ -51,6 +51,11 @@ module RightScale
         @status.nil?
       end
 
+      # @return [Array] escalating termination signals for this platform
+      def signals_for_interrupt
+        ['INT', 'TERM', 'KILL']
+      end
+
       # blocks waiting for process exit status.
       #
       # === Return
@@ -64,13 +69,6 @@ module RightScale
           rescue
             # ignored
           end
-        end
-
-        # an interrupted process can have a nil exitstatus; create a new status
-        # in this case so caller can always expect an integer exitstatus.
-        if @status.nil? || @status.exitstatus.nil?
-          exitstatus = interrupted? ? 1 : 0
-          @status = ::RightScale::RightPopen::ProcessStatus.new(pid, exitstatus)
         end
         @status
       end
@@ -171,47 +169,6 @@ module RightScale
         @stderr = stderr_r
         @status_fd = status_r
         true
-      end
-
-      # Interrupts the running process (without abandoning watch) in increasing
-      # degrees of signalled severity.
-      #
-      # === Return
-      # @return [TrueClass|FalseClass] true if process was alive and killed, false if dead
-      def interrupt
-        while alive?
-          if !@kill_time || Time.now >= @kill_time
-            @next_kill_signal ||= 'INT'
-            if @next_kill_signal == :abandon_child
-              raise ::RightScale::RightPopen::ProcessError.new("Unable to kill child process")
-            end
-            # Process.kill returns 1 for success or else raises an exception
-            result = ::Process.kill(@next_kill_signal, @pid) rescue nil
-
-            # soft then hard interrupt (assumed to be called periodically until
-            # process is gone).
-            case @next_kill_signal
-            when 'INT'
-              @next_kill_signal = 'TERM'
-              @kill_time = Time.now + 3 # seconds for interrupt before term
-            when 'TERM'
-              @next_kill_signal = 'KILL'
-              @kill_time = Time.now + 3 # more seconds for term before kill
-            else
-              # there will be no more kill attempts; abandon child next time
-              @next_kill_signal = :abandon_child
-              @kill_time = Time.now + 3 # more seconds until abandoning child
-            end
-            if result
-              @interrupted = true  # short circuit any outer state machine to retry interrupt
-              break
-            else
-              # last kill attempt disallowed; go around again with escalation.
-              @kill_time = nil
-            end
-          end
-        end
-        @interrupted
       end
 
       # @deprecated this seems like test harness code smell, not production code.

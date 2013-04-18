@@ -70,6 +70,11 @@ module RightScale
         @status.nil?
       end
 
+      # @return [Array] escalating termination signals for this platform
+      def signals_for_interrupt
+        ['INT', 'BRK', 'KILL']
+      end
+
       # spawns a child process using given command and handler target in a
       # win32-specific manner.
       #
@@ -127,7 +132,7 @@ module RightScale
       def wait_for_exit_status
         raise ProcessError.new('Process not started') unless @pid
         unless @status
-          exitstatus = nil
+          exitstatus = 0
           begin
             # note that win32-process gem doesn't support the no-hang parameter
             # and returns exit code instead of status.
@@ -135,56 +140,18 @@ module RightScale
           rescue Process::Error
             # process is gone, which means we have no recourse to retrieve the
             # actual exit code.
-          ensure
-            exitstatus = 0 unless exitstatus
           end
 
           # an interrupted process can still return zero exit status; if we
-          # interrupted it then don't treat it as successful.
-          exitstatus = 1 if 0 == exitstatus && interrupted?
-          @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus)
+          # interrupted it then don't treat it as successful. simulate the Linux
+          # termination signal behavior here.
+          if interrupted?
+            exitstatus = nil
+            termsig = @last_interrupt
+          end
+          @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus, termsig)
         end
         @status
-      end
-
-      # Interrupts the running process (without abandoning watch) in increasing
-      # degrees of signalled severity.
-      #
-      # === Return
-      # @return [TrueClass|FalseClass] true if process was alive and killed, false if dead
-      def interrupt
-        while alive?
-          if !@kill_time || ::Time.now >= @kill_time
-            # soft then hard interrupt (assumed to be called periodically until
-            # process is gone). the win32-process gem returns the pid in an
-            # array if signal is allowed, otherwise empty.
-            if @next_kill_signal == :abandon_child
-              raise ::RightScale::RightPopen::ProcessBase::ProcessError.new('Unable to kill child process')
-            end
-            @next_kill_signal ||= 'INT'
-            result = ::Process.kill(@next_kill_signal, @pid) rescue nil
-            case @next_kill_signal
-            when 'INT'
-              @next_kill_signal = 'TERM'
-              @kill_time = Time.now + 3 # seconds for interrupt before term
-            when 'TERM'
-              @next_kill_signal = 'KILL'
-              @kill_time = Time.now + 3 # more seconds for term before kill
-            else
-              # there will be no more kill attempts; abandon child next time
-              @next_kill_signal = :abandon_child
-              @kill_time = Time.now + 3 # more seconds until abandoning child
-            end
-            if result && !result.empty?
-              @interrupted = true  # short circuit any outer state machine to retry interrupt
-              break
-            else
-              # last kill attempt disallowed; go around again with escalation.
-              @kill_time = nil
-            end
-          end
-        end
-        @interrupted
       end
 
     end

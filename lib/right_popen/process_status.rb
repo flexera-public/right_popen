@@ -29,14 +29,16 @@ module RightScale
     # has no public new method for cases where we need to create our own.
     class ProcessStatus
 
-      attr_reader :pid, :exitstatus
+      attr_reader :pid, :exitstatus, :termsig
 
       # === Parameters
       # @param [Integer] pid as process identifier
-      # @param [Integer] exitstatus as process exit code
-      def initialize(pid, exitstatus)
+      # @param [Integer] exitstatus as process exit code or nil
+      # @param [Integer] termination signal or nil
+      def initialize(pid, exitstatus, termsig=nil)
         @pid = pid
         @exitstatus = exitstatus
+        @termsig = termsig
       end
 
       # Simulates Process::Status.exited? which seems like a weird method since
@@ -51,9 +53,11 @@ module RightScale
       # Simulates Process::Status.success?
       #
       # === Returns
-      # true if the process returned zero as its exit code
+      # true if the process returned zero as its exit code or nil if terminate was signalled
       def success?
-        return @exitstatus ? (0 == @exitstatus) : true;
+        # note that Linux ruby returns nil when exitstatus is nil and a termsig
+        # value is set instead.
+        return @exitstatus ? (0 == @exitstatus) : nil
       end
     end
   end
