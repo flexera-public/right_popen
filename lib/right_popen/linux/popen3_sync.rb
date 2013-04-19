@@ -28,8 +28,7 @@ module RightScale::RightPopen
   # See RightScale.popen3_sync for details
   def self.popen3_sync_impl(cmd, target, options)
     process = ::RightScale::RightPopen::Process.new(options)
-    process.spawn(cmd, target)
-    process.sync_exit_with_target
+    process.sync_all(cmd, target)
     true
   end
 

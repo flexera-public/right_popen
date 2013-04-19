@@ -98,7 +98,23 @@ module RightScale
       # @return [TrueClass|FalseClass] interrupted as true if child process was interrupted by watcher
       def interrupted?; !!@last_interrupt; end
 
-      # spawns a child process using given command and handler target in a
+      # Performs all process operations in synchronous fashion. It is possible
+      # for errors or callback behavior to conditionally short-circuit the
+      # synchronous operations.
+      #
+      # === Parameters
+      # @param [String|Array] cmd as shell command or binary to execute
+      # @param [Object] target that implements all handlers (see TargetProxy)
+      #
+      # === Return
+      # @return [TrueClass] always true
+      def sync_all(cmd, target)
+        spawn(cmd, target)
+        sync_exit_with_target if sync_pid_with_target
+        true
+      end
+
+      # Spawns a child process using given command and handler target in a
       # platform-independant manner.
       #
       # must be overridden and override must call super.
@@ -115,6 +131,7 @@ module RightScale
         @kill_time = nil
         @pid = nil
         @status = nil
+        @last_interrupt = nil
 
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
@@ -126,34 +143,45 @@ module RightScale
                       nil
       end
 
+      # Performs initial handler callbacks before consuming I/O. Represents any
+      # code that must not be invoked twice (unlike sync_exit_with_target).
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true to begin watch, false to abandon
+      def sync_pid_with_target
+        # early handling in case caller wants to stream to/from the pipes
+        # directly (as in a classic popen3/4 scenario).
+        @target.pid_handler(@pid)
+        if input_text = @options[:input]
+          @stdin.write(input_text)
+        end
+
+        # sync watch_handler has the option to abandon watch as soon as child
+        # process comes alive and before streaming any output.
+        if @target.watch_handler(self)
+          # can close stdin if not returning control to caller.
+          @stdin.close rescue nil
+          return true
+        else
+          # caller is reponsible for draining and/or closing all pipes. this can
+          # be accomplished by explicity calling either sync_exit_with_target or
+          # safe_close_io plus wait_for_exit_status (if data has been read from
+          # the I/O streams). it is unsafe to read some data and then call
+          # sync_exit_with_target because IO.select may segfault if all of the
+          # data in a stream has been already consumed.
+          return false
+        end
+      rescue
+        safe_close_io
+        raise
+      end
+
       # Monitors I/O from child process and directly notifies target of any
       # events. Blocks until child exits.
       #
       # === Return
       # @return [TrueClass] always true
       def sync_exit_with_target
-        # early handling in case caller wants to stream to/from the pipes
-        # directly (as in a classic popen3/4 scenario).
-        begin
-          @target.pid_handler(@pid)
-          if input_text = @options[:input]
-            @stdin.write(input_text)
-          end
-
-          # sync watch_handler has the option to abandon watch as soon as child
-          # process comes alive and before streaming any output.
-          if @target.watch_handler(self)
-            # can close stdin if not returning control to caller.
-            @stdin.close rescue nil
-          else
-            # caller is reponsible for draining and closing all pipes.
-            return true
-          end
-        rescue
-          safe_close_io
-          raise
-        end
-
         # note that calling IO.select on pipes which have already had all
         # of their output consumed can cause segfault (in Ubuntu?) so it is
         # important to keep track of when all I/O has been consumed.
