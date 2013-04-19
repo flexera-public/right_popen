@@ -146,13 +146,6 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true to begin watch, false to abandon
       def sync_pid_with_target
-        # start timer when process comes alive (ruby processes are slow to
-        # start in Windows, etc.).
-        @start_time = ::Time.now
-        @stop_time  = @options[:timeout_seconds] ?
-                      (@start_time + @options[:timeout_seconds]) :
-                      nil
-
         # early handling in case caller wants to stream to/from the pipes
         # directly (as in a classic popen3/4 scenario).
         @target.pid_handler(@pid)
@@ -306,6 +299,17 @@ module RightScale
         true
       end
 
+      protected
+
+      def start_timer
+        # start timer when process comes alive (ruby processes are slow to
+        # start in Windows, etc.).
+        raise ProcessError.new("Process not started") unless @pid
+        @start_time = ::Time.now
+        @stop_time  = @options[:timeout_seconds] ?
+                      (@start_time + @options[:timeout_seconds]) :
+                      nil
+      end
     end
   end
 end

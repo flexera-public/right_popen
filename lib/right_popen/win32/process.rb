@@ -122,6 +122,7 @@ module RightScale
             asynchronous_output = true,
             environment_strings)
         end
+        start_timer
         true
       end
 

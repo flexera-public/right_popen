@@ -264,8 +264,8 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should interrupt watched child process when timeout expires" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'sleeper.rb'))}\""
-        runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>2)
+        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'sleeper.rb'))}\" 10"
+        runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>0.1)
         runner_status.status.success?.should be_false
         runner_status.did_timeout.should be_true
         runner_status.output_text.should_not be_empty

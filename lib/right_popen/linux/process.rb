@@ -168,6 +168,7 @@ module RightScale
         @stdout = stdout_r
         @stderr = stderr_r
         @status_fd = status_r
+        start_timer
         true
       end
 
