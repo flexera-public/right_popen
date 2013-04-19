@@ -160,47 +160,57 @@ module RightScale::RightPopen
     # always create eventables on the main EM thread by using next_tick. this
     # prevents synchronization problems between EM threads.
     ::EM.next_tick do
-      # create process.
-      process = ::RightScale::RightPopen::Process.new(options)
-      process.spawn(cmd, target)
+      process = nil
+      begin
+        # create process.
+        process = ::RightScale::RightPopen::Process.new(options)
+        process.spawn(cmd, target)
 
-      # close input immediately unless streaming. the EM implementation is
-      # flawed so it is important to not create an eventable for the input
-      # stream unless required. the issue stems from EM thinking that file
-      # handles and socket handles come from the same pool in the stdio
-      # libraries; in Linux they come from the same pool, in Windows they don't.
-      process.stdin.close unless options[:input]
+        # close input immediately unless streaming. the EM implementation is
+        # flawed so it is important to not create an eventable for the input
+        # stream unless required. the issue stems from EM thinking that file
+        # handles and socket handles come from the same pool in the stdio
+        # libraries; in Linux they come from the same pool, in Windows they don't.
+        process.stdin.close unless options[:input]
 
-      # attach handlers to event machine and let it monitor incoming data. the
-      # streams aren't used directly by the connectors except that they are
-      # closed on unbind.
-      stderr_eventable = ::EM.watch(process.stderr, ::RightScale::RightPopen::StdErrHandler, target, process.stderr) do |c|
-        c.notify_readable = true
-      end
-      ::EM.watch(process.stdout, ::RightScale::RightPopen::StdOutHandler, process, target, stderr_eventable, process.stdout) do |c|
-        c.notify_readable = true
-        target.pid_handler(process.pid)
-
-        # initial watch callback.
-        #
-        # note that we cannot abandon async watch; callback needs to interrupt
-        # in this case
-        target.watch_handler(process)
-      end
-      if options[:input]
-        ::EM.attach(process.stdin, ::RightScale::RightPopen::StdInHandler, options, process.stdin)
-      end
-
-      # create a periodic watcher only if needed in the win32 async case because
-      # the exit handler is tied to EM eventable detachment.
-      #
-      # TEAL FIX: does this logic need to differ from Linux or can they share
-      # the same code? they probably differ because the mswin32 implementation
-      # of EM stopped many versions back.
-      if process.needs_watching?
-        ::EM.next_tick do
-          watch_process(process, 0.1, target)
+        # attach handlers to event machine and let it monitor incoming data. the
+        # streams aren't used directly by the connectors except that they are
+        # closed on unbind.
+        stderr_eventable = ::EM.watch(process.stderr, ::RightScale::RightPopen::StdErrHandler, target, process.stderr) do |c|
+          c.notify_readable = true
         end
+        ::EM.watch(process.stdout, ::RightScale::RightPopen::StdOutHandler, process, target, stderr_eventable, process.stdout) do |c|
+          c.notify_readable = true
+          target.pid_handler(process.pid)
+
+          # initial watch callback.
+          #
+          # note that we cannot abandon async watch; callback needs to interrupt
+          # in this case
+          target.watch_handler(process)
+        end
+        if options[:input]
+          ::EM.attach(process.stdin, ::RightScale::RightPopen::StdInHandler, options, process.stdin)
+        end
+
+        # create a periodic watcher only if needed in the win32 async case because
+        # the exit handler is tied to EM eventable detachment.
+        #
+        # TEAL FIX: does this logic need to differ from Linux or can they share
+        # the same code? they probably differ because the mswin32 implementation
+        # of EM stopped many versions back.
+        if process.needs_watching?
+          ::EM.next_tick do
+            watch_process(process, 0.1, target)
+          end
+        end
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
+        target.exit_handler(process.status) rescue nil if target && process
       end
     end
 
@@ -224,14 +234,22 @@ module RightScale::RightPopen
   # true:: Always return true
   def self.watch_process(process, wait_time, target)
     ::EM::Timer.new(wait_time) do
-      if process.alive?
-        if process.timer_expired? || process.size_limit_exceeded?
-          process.interrupt
-        else
-          # cannot abandon async watch; callback needs to interrupt in this case
-          target.watch_handler(process)
+      begin
+        if process.alive?
+          if process.timer_expired? || process.size_limit_exceeded?
+            process.interrupt
+          else
+            # cannot abandon async watch; callback needs to interrupt in this case
+            target.watch_handler(process)
+          end
+          watch_process(process, [wait_time * 2, 1].min, target)
         end
-        watch_process(process, [wait_time * 2, 1].min, target)
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
       end
     end
     true

@@ -124,27 +124,37 @@ module RightScale::RightPopen
     # always create eventables on the main EM thread by using next_tick. this
     # prevents synchronization problems between EM threads.
     ::EM.next_tick do
-      # create process.
-      process = ::RightScale::RightPopen::Process.new(options)
-      process.spawn(cmd, target)
+      process = nil
+      begin
+        # create process.
+        process = ::RightScale::RightPopen::Process.new(options)
+        process.spawn(cmd, target)
 
-      # connect EM eventables to open streams.
-      handlers = []
-      handlers << ::EM.attach(process.status_fd, ::RightScale::RightPopen::StatusHandler, process.status_fd)
-      handlers << ::EM.attach(process.stderr, ::RightScale::RightPopen::PipeHandler, process.stderr, target, :stderr_handler)
-      handlers << ::EM.attach(process.stdout, ::RightScale::RightPopen::PipeHandler, process.stdout, target, :stdout_handler)
-      handlers << ::EM.attach(process.stdin, ::RightScale::RightPopen::InputHandler, process.stdin, options[:input])
+        # connect EM eventables to open streams.
+        handlers = []
+        handlers << ::EM.attach(process.status_fd, ::RightScale::RightPopen::StatusHandler, process.status_fd)
+        handlers << ::EM.attach(process.stderr, ::RightScale::RightPopen::PipeHandler, process.stderr, target, :stderr_handler)
+        handlers << ::EM.attach(process.stdout, ::RightScale::RightPopen::PipeHandler, process.stdout, target, :stdout_handler)
+        handlers << ::EM.attach(process.stdin, ::RightScale::RightPopen::InputHandler, process.stdin, options[:input])
 
-      target.pid_handler(process.pid)
+        target.pid_handler(process.pid)
 
-      # initial watch callback.
-      #
-      # note that we cannot abandon async watch; callback needs to interrupt
-      # in this case
-      target.watch_handler(process)
+        # initial watch callback.
+        #
+        # note that we cannot abandon async watch; callback needs to interrupt
+        # in this case
+        target.watch_handler(process)
 
-      # periodic watcher.
-      watch_process(process, 0.1, target, handlers)
+        # periodic watcher.
+        watch_process(process, 0.1, target, handlers)
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
+        target.exit_handler(process.status) rescue nil if target && process
+      end
     end
     true
   end
@@ -162,28 +172,29 @@ module RightScale::RightPopen
   # true:: Always return true
   def self.watch_process(process, wait_time, target, handlers)
     ::EM::Timer.new(wait_time) do
-      if process.alive?
-        if process.timer_expired? || process.size_limit_exceeded?
-          process.interrupt
-        else
-          # cannot abandon async watch; callback needs to interrupt in this case
-          target.watch_handler(process)
-        end
-        watch_process(process, [wait_time * 2, 1].min, target, handlers)
-      else
-        first_exception = nil
-        handlers.each do |h|
-          begin
-            h.drain_and_close
-          rescue ::Exception => e
-            first_exception = e unless first_exception
+      begin
+        if process.alive?
+          if process.timer_expired? || process.size_limit_exceeded?
+            process.interrupt
+          else
+            # cannot abandon async watch; callback needs to interrupt in this case
+            target.watch_handler(process)
           end
+          watch_process(process, [wait_time * 2, 1].min, target, handlers)
+        else
+          handlers.each { |h| h.drain_and_close rescue nil }
+          process.wait_for_exit_status
+          target.timeout_handler rescue nil if process.timer_expired?
+          target.size_limit_handler rescue nil if process.size_limit_exceeded?
+          target.exit_handler(process.status) rescue nil
         end
-        process.wait_for_exit_status
-        target.timeout_handler if process.timer_expired?
-        target.size_limit_handler if process.size_limit_exceeded?
-        target.exit_handler(process.status)
-        raise first_exception if first_exception
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
+        target.exit_handler(process.status) rescue nil if target && process
       end
     end
     true

@@ -124,6 +124,12 @@ module RightScale
         end
         start_timer
         true
+      rescue
+        # catch-all for failure to spawn process ensuring a non-nil status. the
+        # PID most likely is nil but the exit handler can be invoked for async.
+        safe_close_io
+        @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
+        raise
       end
 
       # blocks waiting for process exit status.
