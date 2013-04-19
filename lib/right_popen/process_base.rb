@@ -30,6 +30,7 @@ module RightScale
       class ProcessError < Exception; end
 
       attr_reader :pid, :stdin, :stdout, :stderr, :status_fd, :status
+      attr_reader :start_time, :stop_time
 
       # === Parameters
       # @param [Hash] options see RightScale.popen3_async for details
@@ -41,6 +42,7 @@ module RightScale
         @status_fd = nil
         @last_interrupt = nil
         @pid = nil
+        @start_time = nil
         @stop_time = nil
         @watch_directory = nil
         @size_limit_bytes = nil
@@ -73,7 +75,7 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true if timer expired
       def timer_expired?
-        !!(@stop_time && Time.now > @stop_time)
+        !!(@stop_time && Time.now >= @stop_time)
       end
 
       # Determines if total size of files created by child process has exceeded
@@ -136,11 +138,6 @@ module RightScale
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
         end
-
-        @start_time = ::Time.now
-        @stop_time  = @options[:timeout_seconds] ?
-                      (@start_time + @options[:timeout_seconds]) :
-                      nil
       end
 
       # Performs initial handler callbacks before consuming I/O. Represents any
@@ -149,6 +146,13 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true to begin watch, false to abandon
       def sync_pid_with_target
+        # start timer when process comes alive (ruby processes are slow to
+        # start in Windows, etc.).
+        @start_time = ::Time.now
+        @stop_time  = @options[:timeout_seconds] ?
+                      (@start_time + @options[:timeout_seconds]) :
+                      nil
+
         # early handling in case caller wants to stream to/from the pipes
         # directly (as in a classic popen3/4 scenario).
         @target.pid_handler(@pid)
