@@ -190,12 +190,17 @@ module RightScale
         abandon = false
         last_exception = nil
         begin
-          while !channels_to_finish.empty?
+          while true
             channels_to_watch = channels_to_finish.values.dup
             ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
             dead = !alive?
-            if ready
-              ready.first.each do |channel|
+            channels_to_read = ready && ready.first
+            if dead
+              # finish reading all dead channels.
+              channels_to_read = channels_to_finish.values.dup
+            end
+            if channels_to_read
+              channels_to_read.each do |channel|
                 key = channels_to_finish.find { |k, v| v == channel }.first
                 data = dead ? channel.gets(nil) : channel.gets
                 if data
@@ -211,7 +216,7 @@ module RightScale
               end
             end
             if dead
-              channels_to_finish = {}
+              break
             elsif (interrupted? || timer_expired? || size_limit_exceeded?)
               interrupt
             elsif abandon = !@target.watch_handler(self)
