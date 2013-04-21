@@ -1,28 +1,35 @@
-GIT
-  remote: git@github.com:rightscale/rightscale-eventmachine.git
-  revision: 7bb4310efde3ea4c735c3a962cd8a38d366d64d2
-  specs:
-    eventmachine (1.0.0.2)
-
-PATH
-  remote: .
-  specs:
-    right_popen (1.1.1)
-
 GEM
   remote: https://rubygems.org/
+  remote: http://s3.amazonaws.com/rightscale_rightlink_gems_dev/
   specs:
+    eventmachine (1.0.0.2-x86-mswin32)
     flexmock (0.8.11)
     rake (0.8.7)
     rspec (1.3.1)
+    win32-api (1.4.5-x86-mswin32)
+    win32-dir (0.3.5)
+      windows-pr (>= 0.9.3)
+    win32-process (0.6.1)
+      windows-pr (>= 1.0.5)
+    win32console (1.3.2-x86-mswin32)
+    windows-api (0.4.0)
+      win32-api (>= 1.4.5)
+    windows-pr (1.0.8)
+      win32-api (>= 1.4.5)
+      windows-api (>= 0.3.0)
 
 PLATFORMS
   ruby
   x86-mswin32
 
 DEPENDENCIES
-  eventmachine (>= 1.0.0.2)!
-  flexmock
-  rake (~> 0.8.7)
-  right_popen!
+  eventmachine (= 1.0.0.2)
+  flexmock (~> 0.8)
+  rake (= 0.8.7)
   rspec (~> 1.3)
+  win32-api (= 1.4.5)
+  win32-dir (= 0.3.5)
+  win32-process (= 0.6.1)
+  win32console (~> 1.3.0)
+  windows-api (= 0.4.0)
+  windows-pr (= 1.0.8)
