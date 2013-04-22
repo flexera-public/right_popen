@@ -70,6 +70,16 @@ module RightScale
         @status.nil?
       end
 
+      # Windows must drain all streams on child death in order to ensure all
+      # output is read. if the child closes only one of the streams there is no
+      # possibility of hanging (Windows will simply read EOF).
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true if draining all
+      def drain_all_upon_death?
+        true
+      end
+
       # @return [Array] escalating termination signals for this platform
       def signals_for_interrupt
         ['INT', 'BRK', 'KILL']

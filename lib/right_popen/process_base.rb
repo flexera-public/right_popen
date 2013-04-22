@@ -63,6 +63,16 @@ module RightScale
         raise NotImplementedError, 'Must be overridden'
       end
 
+      # Determines whether or not to drain all open streams upon death of child
+      # or else only those where IO.select indicates data available. This
+      # decision is platform-specific.
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true if draining all
+      def drain_all_upon_death?
+        raise NotImplementedError, 'Must be overridden'
+      end
+
       # Determines if this process needs to be watched (beyond waiting for the
       # process to exit).
       #
@@ -195,7 +205,7 @@ module RightScale
             ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
             dead = !alive?
             channels_to_read = ready && ready.first
-            if dead
+            if dead && drain_all_upon_death?
               # finish reading all dead channels.
               channels_to_read = channels_to_finish.values.dup
             end
@@ -282,6 +292,7 @@ module RightScale
             end
             @last_interrupt = next_interrupt
 
+            # kill
             result = ::Process.kill(next_interrupt, @pid) rescue nil
             if result
               @kill_time = Time.now + 3 # more seconds until next attempt

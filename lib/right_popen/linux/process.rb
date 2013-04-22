@@ -51,6 +51,17 @@ module RightScale
         @status.nil?
       end
 
+      # Linux must only read streams that are selected for read, even on child
+      # death. the issue is that a child process can (inexplicably) close one of
+      # the streams but continue writing to the other and this will cause the
+      # parent to hang reading the stream until the child goes away.
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true if draining all
+      def drain_all_upon_death?
+        false
+      end
+
       # @return [Array] escalating termination signals for this platform
       def signals_for_interrupt
         ['INT', 'TERM', 'KILL']
