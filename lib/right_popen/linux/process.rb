@@ -148,7 +148,13 @@ module RightScale
               ::File.umask(umask)
             end
 
-            ::Dir.chdir(@options[:directory]) if @options[:directory]
+            # avoid chdir when pwd is already correct due to asinine printed
+            # warning from chdir block for what is basically a no-op.
+            working_directory = @options[:directory]
+            if working_directory &&
+               ::File.expand_path(working_directory) != ::File.expand_path(::Dir.pwd)
+              ::Dir.chdir(working_directory)
+            end
 
             environment_hash = {}
             environment_hash['LC_ALL'] = 'C' if @options[:locale]
