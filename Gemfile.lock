@@ -1,8 +1,7 @@
 PATH
   remote: .
   specs:
-    right_popen (1.1.1-x86-mswin32)
-      win32-process (>= 0.6.1)
+    right_popen (1.1.1)
 
 GEM
   remote: http://s3.amazonaws.com/rightscale_rightlink_gems_dev/
