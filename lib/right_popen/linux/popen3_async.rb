@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2009 RightScale Inc
+# Copyright (c) 2009-2013 RightScale Inc
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,17 +21,13 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-# RightScale.popen3 allows running external processes aynchronously
-# while still capturing their standard and error outputs.
-# It relies on EventMachine for most of its internal mechanisms.
-
 require 'rubygems'
 require 'eventmachine'
-require File.expand_path(File.join(File.dirname(__FILE__), "process"))
-require File.expand_path(File.join(File.dirname(__FILE__), "accumulator"))
-require File.expand_path(File.join(File.dirname(__FILE__), "utilities"))
 
-module RightScale
+require File.expand_path(File.join(File.dirname(__FILE__), "process"))
+
+module RightScale::RightPopen
+
   # ensure uniqueness of handler to avoid confusion.
   raise "#{StatusHandler.name} is already defined" if defined?(StatusHandler)
 
@@ -63,8 +59,8 @@ module RightScale
 
     def unbind
       if @data.size > 0
-        e = Marshal.load @data
-        raise (Exception === e ? e : "unknown failure: saw #{e} on status channel")
+        e = ::Marshal.load(@data)
+        raise (::Exception === e ? e : "unknown failure: saw #{e} on status channel")
       end
     end
   end
@@ -80,11 +76,11 @@ module RightScale
       # itself.
       @handle = file_handle
       @target = target
-      @handler = handler
+      @data_handler = @target.method(handler)
     end
 
     def receive_data(data)
-      @target.method(@handler).call(data) if @handler
+      @data_handler.call(data)
     end
 
     def drain_and_close
@@ -123,62 +119,82 @@ module RightScale
     end
   end
 
-  # Forks process to run given command asynchronously, hooking all three
-  # standard streams of the child process.
-  #
-  # === Parameters
-  # options[:pid_handler](Symbol):: Token for pid handler method name.
-  #
-  # See RightScale.popen3
-  def self.popen3_imp(options)
-    GC.start # To garbage collect open file descriptors from past executions
-    EM.next_tick do
-      process = RightPopen::Process.new(:environment => options[:environment] || {})
-      process.fork(options[:command])
+  # See RightScale.popen3_async for details
+  def self.popen3_async_impl(cmd, target, options)
+    # always create eventables on the main EM thread by using next_tick. this
+    # prevents synchronization problems between EM threads.
+    ::EM.next_tick do
+      process = nil
+      begin
+        # create process.
+        process = ::RightScale::RightPopen::Process.new(options)
+        process.spawn(cmd, target)
 
-      handlers = []
-      handlers << EM.attach(process.status_fd, StatusHandler, process.status_fd)
-      handlers << EM.attach(process.stderr, PipeHandler, process.stderr, options[:target],
-                            options[:stderr_handler])
-      handlers << EM.attach(process.stdout, PipeHandler, process.stdout, options[:target],
-                            options[:stdout_handler])
-      handlers << EM.attach(process.stdin, InputHandler, process.stdin, options[:input])
+        # connect EM eventables to open streams.
+        handlers = []
+        handlers << ::EM.attach(process.status_fd, ::RightScale::RightPopen::StatusHandler, process.status_fd)
+        handlers << ::EM.attach(process.stderr, ::RightScale::RightPopen::PipeHandler, process.stderr, target, :stderr_handler)
+        handlers << ::EM.attach(process.stdout, ::RightScale::RightPopen::PipeHandler, process.stdout, target, :stdout_handler)
+        handlers << ::EM.attach(process.stdin, ::RightScale::RightPopen::InputHandler, process.stdin, options[:input])
 
-      options[:target].method(options[:pid_handler]).call(process.pid) if options.key? :pid_handler
+        target.pid_handler(process.pid)
 
-      handle_exit(process.pid, 0.1, handlers, options)
+        # initial watch callback.
+        #
+        # note that we cannot abandon async watch; callback needs to interrupt
+        # in this case
+        target.watch_handler(process)
+
+        # periodic watcher.
+        watch_process(process, 0.1, target, handlers)
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
+        target.exit_handler(process.status) rescue nil if target && process
+      end
     end
     true
   end
 
-  # Wait for process to exit and then call exit handler
-  # If no exit detected, double the wait time up to a maximum of 2 seconds
+  # watches process for exit or interrupt criteria. doubles the wait time up to
+  # a maximum of 1 second for next wait.
   #
   # === Parameters
-  # pid(Integer):: Process identifier
-  # wait_time(Fixnum):: Amount of time to wait before checking status
-  # handlers(Array):: Handlers for status, stderr, stdout, and stdin
-  # options[:exit_handler](Symbol):: Handler to be called when process exits
-  # options[:target](Object):: Object initiating command execution
+  # @param [Process] process that was run
+  # @param [Numeric] wait_time as seconds to wait before checking status
+  # @param [Object] target for handler calls
+  # @param [Array] handlers used by eventmachine for status, stderr, stdout, and stdin
   #
   # === Return
   # true:: Always return true
-  def self.handle_exit(pid, wait_time, handlers, options)
-    EM::Timer.new(wait_time) do
-      if value = Process.waitpid2(pid, Process::WNOHANG)
-        ignored, status = value
-        first_exception = nil
-        handlers.each do |h|
-          begin
-            h.drain_and_close
-          rescue Exception => e
-            first_exception = e unless first_exception
+  def self.watch_process(process, wait_time, target, handlers)
+    ::EM::Timer.new(wait_time) do
+      begin
+        if process.alive?
+          if process.timer_expired? || process.size_limit_exceeded?
+            process.interrupt
+          else
+            # cannot abandon async watch; callback needs to interrupt in this case
+            target.watch_handler(process)
           end
+          watch_process(process, [wait_time * 2, 1].min, target, handlers)
+        else
+          handlers.each { |h| h.drain_and_close rescue nil }
+          process.wait_for_exit_status
+          target.timeout_handler rescue nil if process.timer_expired?
+          target.size_limit_handler rescue nil if process.size_limit_exceeded?
+          target.exit_handler(process.status) rescue nil
         end
-        options[:target].method(options[:exit_handler]).call(status) if options[:exit_handler]
-        raise first_exception if first_exception
-      else
-        handle_exit(pid, [wait_time * 2, 1].min, handlers, options)
+      rescue
+        # we can't raise from the main EM thread or it will stop EM.
+        # the spawn method will signal the exit handler but not the
+        # pid handler in this case since there is no pid. any action
+        # (logging, etc.) associated with the failure will have to be
+        # driven by the exit handler.
+        target.exit_handler(process.status) rescue nil if target && process
       end
     end
     true

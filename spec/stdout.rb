@@ -23,6 +23,6 @@
 
 $stderr.puts "Closing stdout"
 STDOUT.close
-sleep 3
+sleep 15
 $stderr.puts "Exiting"
 exit 0

@@ -1,5 +1,5 @@
 #--  -*- mode: ruby; encoding: utf-8 -*-
-# Copyright: Copyright (c) 2011-2013 RightScale, Inc.
+# Copyright: Copyright (c) 2011 RightScale, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,8 +21,14 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-module RightScale
-  module RightPopen
-    VERSION = "1.1.1"
+watched_dir = ARGV[0]
+
+10.times do |i|
+  path = ::File.join(watched_dir, "file#{i}.txt")
+  ::File.open(path, 'w') do |f|
+    f.write 'x' * 100
   end
+  sleep 0.2
 end
+
+exit 0
