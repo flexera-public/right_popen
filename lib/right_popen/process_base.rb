@@ -30,7 +30,7 @@ module RightScale
       class ProcessError < Exception; end
 
       attr_reader :pid, :stdin, :stdout, :stderr, :status_fd, :status
-      attr_reader :start_time, :stop_time
+      attr_reader :start_time, :stop_time, :channels_to_finish
 
       # === Parameters
       # @param [Hash] options see RightScale.popen3_async for details
@@ -49,6 +49,7 @@ module RightScale
         @cmd = nil
         @target = nil
         @status = nil
+        @channels_to_finish = nil
         @needs_watching = !!(
           @options[:timeout_seconds] ||
           @options[:size_limit_bytes] ||
@@ -144,6 +145,7 @@ module RightScale
         @pid = nil
         @status = nil
         @last_interrupt = nil
+        @channels_to_finish = nil
 
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
@@ -162,6 +164,19 @@ module RightScale
         if input_text = @options[:input]
           @stdin.write(input_text)
         end
+
+        # one-time initialization of the stateful channels_to_finish hash to
+        # allow for multiple invocations of the sync_exit_with_target with a
+        # possible abandon in between.
+        #
+        # note that calling IO.select on pipes which have already had all
+        # of their output consumed can cause segfault (in Ubuntu?) so it is
+        # important to keep track of when all I/O has been consumed.
+        @channels_to_finish = [
+          [:stdout_handler, @stdout],
+          [:stderr_handler, @stderr],
+        ]
+        @channels_to_finish << [:status_fd, @status_fd] if @status_fd
 
         # sync watch_handler has the option to abandon watch as soon as child
         # process comes alive and before streaming any output.
@@ -189,29 +204,22 @@ module RightScale
       # === Return
       # @return [TrueClass] always true
       def sync_exit_with_target
-        # note that calling IO.select on pipes which have already had all
-        # of their output consumed can cause segfault (in Ubuntu?) so it is
-        # important to keep track of when all I/O has been consumed.
-        channels_to_finish = {
-          :stdout_handler => @stdout,
-          :stderr_handler => @stderr
-        }
-        channels_to_finish[:status_fd] = @status_fd if @status_fd
         abandon = false
         last_exception = nil
         begin
           while true
-            channels_to_watch = channels_to_finish.values.dup
+            channels_to_watch = @channels_to_finish.map { |ctf| ctf.last }
             ready = ::IO.select(channels_to_watch, nil, nil, 0.1) rescue nil
             dead = !alive?
             channels_to_read = ready && ready.first
             if dead && drain_all_upon_death?
               # finish reading all dead channels.
-              channels_to_read = channels_to_finish.values.dup
+              channels_to_read = @channels_to_finish.map { |ctf| ctf.last }
             end
             if channels_to_read
               channels_to_read.each do |channel|
-                key = channels_to_finish.find { |k, v| v == channel }.first
+                index = @channels_to_finish.index { |ctf| ctf.last == channel }
+                key = @channels_to_finish[index].first
                 data = dead ? channel.gets(nil) : channel.gets
                 if data
                   if key == :status_fd
@@ -221,7 +229,7 @@ module RightScale
                   end
                 else
                   # nothing on channel indicates EOF
-                  channels_to_finish.delete(key)
+                  @channels_to_finish.delete_at(index)
                 end
               end
             end
