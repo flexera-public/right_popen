@@ -1,5 +1,5 @@
 #--  -*- mode: ruby; encoding: utf-8 -*-
-# Copyright: Copyright (c) 2011 RightScale, Inc.
+# Copyright: Copyright (c) 2011-2013 RightScale, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -23,20 +23,87 @@
 
 require 'etc'
 
+require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_base'))
+require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_status'))
+
 module RightScale
   module RightPopen
-    class Process
-      attr_reader :pid, :stdin, :stdout, :stderr, :status_fd
-      attr_accessor :status
+    class Process < ProcessBase
 
-      def initialize(parameters={})
-        parameters[:locale] = true unless parameters.has_key?(:locale)
-        @parameters = parameters
-        @status_fd = nil
+      def initialize(options={})
+        super(options)
       end
 
-      def fork(cmd)
-        @cmd = cmd
+      # Determines if the process is still running.
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true if running
+      def alive?
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          begin
+            ignored, status = ::Process.waitpid2(@pid, ::Process::WNOHANG)
+            @status = status
+          rescue
+            wait_for_exit_status
+          end
+        end
+        @status.nil?
+      end
+
+      # Linux must only read streams that are selected for read, even on child
+      # death. the issue is that a child process can (inexplicably) close one of
+      # the streams but continue writing to the other and this will cause the
+      # parent to hang reading the stream until the child goes away.
+      #
+      # === Return
+      # @return [TrueClass|FalseClass] true if draining all
+      def drain_all_upon_death?
+        false
+      end
+
+      # @return [Array] escalating termination signals for this platform
+      def signals_for_interrupt
+        ['INT', 'TERM', 'KILL']
+      end
+
+      # blocks waiting for process exit status.
+      #
+      # === Return
+      # @return [ProcessStatus] exit status
+      def wait_for_exit_status
+        raise ProcessError.new('Process not started') unless @pid
+        unless @status
+          begin
+            ignored, status = ::Process.waitpid2(@pid)
+            @status = status
+          rescue
+            # ignored
+          end
+        end
+        @status
+      end
+
+      # spawns (forks) a child process using given command and handler target in
+      # linux-specific manner.
+      #
+      # must be overridden and override must call super.
+      #
+      # === Parameters
+      # @param [String|Array] cmd as shell command or binary to execute
+      # @param [Object] target that implements all handlers (see TargetProxy)
+      #
+      # === Return
+      # @return [TrueClass] always true
+      def spawn(cmd, target)
+        super(cmd, target)
+
+        # garbage collect any open file descriptors from past executions before
+        # forking to prevent them being inherited. also reduces memory footprint
+        # since forking will duplicate everything in memory for child process.
+        ::GC.start
+
+        # create pipes.
         stdin_r, stdin_w = IO.pipe
         stdout_r, stdout_w = IO.pipe
         stderr_r, stderr_w = IO.pipe
@@ -45,24 +112,26 @@ module RightScale
         [stdin_r, stdin_w, stdout_r, stdout_w,
          stderr_r, stderr_w, status_r, status_w].each {|fdes| fdes.sync = true}
 
-        @pid = Kernel::fork do
+        @pid = ::Kernel::fork do
           begin
             stdin_w.close
-            STDIN.reopen stdin_r
+            ::STDIN.reopen stdin_r
 
             stdout_r.close
-            STDOUT.reopen stdout_w
+            ::STDOUT.reopen stdout_w
 
             stderr_r.close
-            STDERR.reopen stderr_w
+            ::STDERR.reopen stderr_w
 
             status_r.close
-            status_w.fcntl(Fcntl::F_SETFD, Fcntl::FD_CLOEXEC)
+            status_w.fcntl(::Fcntl::F_SETFD, ::Fcntl::FD_CLOEXEC)
 
-            ObjectSpace.each_object(IO) do |io|
-              if ![STDIN, STDOUT, STDERR, status_w].include?(io)
-            	  io.close unless io.closed?
-            	end
+            unless @options[:inherit_io]
+              ::ObjectSpace.each_object(IO) do |io|
+                if ![::STDIN, ::STDOUT, ::STDERR, status_w].include?(io)
+                  io.close unless io.closed?
+                end
+              end
             end
 
             if group = get_group
@@ -75,24 +144,34 @@ module RightScale
               ::Process.uid = user
             end
 
-            Dir.chdir(@parameters[:directory]) if @parameters[:directory]
+            if umask = get_umask
+              ::File.umask(umask)
+            end
 
-            ENV["LC_ALL"] = "C" if @parameters[:locale]
+            # avoid chdir when pwd is already correct due to asinine printed
+            # warning from chdir block for what is basically a no-op.
+            working_directory = @options[:directory]
+            if working_directory &&
+               ::File.expand_path(working_directory) != ::File.expand_path(::Dir.pwd)
+              ::Dir.chdir(working_directory)
+            end
 
-            @parameters[:environment].each do |key,value|
-              ENV[key.to_s] = value.to_s
-            end if @parameters[:environment]
-
-            File.umask(get_umask) if @parameters[:umask]
+            environment_hash = {}
+            environment_hash['LC_ALL'] = 'C' if @options[:locale]
+            environment_hash.merge!(@options[:environment]) if @options[:environment]
+            environment_hash.each do |key, value|
+              ::ENV[key.to_s] = value.to_s if value
+            end
 
             if cmd.kind_of?(Array)
+              cmd = cmd.map { |c| c.to_s } #exec only likes string arguments
               exec(*cmd)
             else
-              exec("sh", "-c", cmd)
+              exec('sh', '-c', cmd.to_s)  # allows shell commands for cmd string
             end
-            raise 'forty-two' 
-          rescue Exception => e
-            Marshal.dump(e, status_w)
+            raise 'Unreachable code'
+          rescue ::Exception => e
+            ::Marshal.dump(e, status_w)
           end
           status_w.close
           exit!
@@ -106,11 +185,21 @@ module RightScale
         @stdout = stdout_r
         @stderr = stderr_r
         @status_fd = status_r
+        start_timer
+        true
+      rescue
+        # catch-all for failure to spawn process ensuring a non-nil status. the
+        # PID most likely is nil but the exit handler can be invoked for async.
+        safe_close_io
+        @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
+        raise
       end
 
+      # @deprecated this seems like test harness code smell, not production code.
       def wait_for_exec
+        warn 'WARNING: RightScale::RightPopen::Process#wait_for_exec is deprecated in lib and will be moved to spec'
         begin
-          e = Marshal.load @status_fd
+          e = ::Marshal.load(@status_fd)
           # thus meaning that the process failed to exec...
           @stdin.close
           @stdout.close
@@ -126,28 +215,29 @@ module RightScale
       private
 
       def get_user
-        user = @parameters[:user] || nil
-        unless user.kind_of?(Integer)
-          user = Etc.getpwnam(user).uid if user
+        if user = @options[:user]
+          user = Etc.getpwnam(user).uid unless user.kind_of?(Integer)
         end
         user
       end
 
       def get_group
-        group = @parameters[:group] || nil
-        unless group.kind_of?(Integer)
-          group = Etc.getgrnam(group).gid if group
+        if group = @options[:group]
+          group = Etc.getgrnam(group).gid unless group.kind_of?(Integer)
         end
         group
       end
 
       def get_umask
-        if @parameters[:umask].respond_to?(:oct)
-          value = @parameters[:umask].oct
-        else
-          value = @parameters[:umask].to_i
+        if umask = @options[:umask]
+          if umask.respond_to?(:oct)
+            umask = umask.oct
+          else
+            umask = umask.to_i
+          end
+          umask = umask & 007777
         end
-        value & 007777
+        umask
       end
     end
   end
