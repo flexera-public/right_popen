@@ -120,17 +120,33 @@ module RightScale
           cmd = escaped.join(' ')
         end
 
-        # child will inherit initial working directory, if given.
-        directory = (@options[:directory] || ::Dir.pwd).gsub("\\", '/')
+        # avoid calling Dir.chdir unless necessary because it prints annoying
+        # warnings on reentrance even when directory is same.
+        if new_directory = @options[:directory]
+          old_directory = ::File.expand_path(::Dir.pwd).gsub("\\", '/')
+          new_directory = ::File.expand_path(new_directory).gsub("\\", '/')
+          # do nothing if new directory is same as old directory
+          if new_directory == old_directory
+            new_directory = nil
+            old_directory = nil
+          else
+            # child process will inherit parent's working directory on creation.
+            ::Dir.chdir(new_directory)
+          end
+        else
+          old_directory = nil
+        end
 
-        # launch cmd using native win32 implementation.
-        ::Dir.chdir(directory) do
+        begin
+          # launch cmd using native win32 implementation.
           @stdin, @stdout, @stderr, @pid = ::RightScale::RightPopen.popen4(
             cmd,
             mode = 't',
             show_window = false,
             asynchronous_output = true,
             environment_strings)
+        ensure
+          ::Dir.chdir(old_directory) if old_directory
         end
         start_timer
         true
