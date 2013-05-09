@@ -113,41 +113,53 @@ module RightScale
         # resolve command string from array, if necessary.
         if cmd.kind_of?(::Array)
           escaped = []
-          cmd.flatten.each do |arg|
-            value = arg.to_s
-            escaped << (value.index(' ') ? "\"#{value}\"" : value)
+          cmd.flatten.each_with_index do |token, token_index|
+            token = token.to_s
+            if token_index == 0
+              token = self.class.find_executable_in_path(token)
+            end
+            escaped << self.class.quoted_command_token(token)
           end
           cmd = escaped.join(' ')
-        end
-
-        # avoid calling Dir.chdir unless necessary because it prints annoying
-        # warnings on reentrance even when directory is same.
-        if new_directory = @options[:directory]
-          old_directory = ::File.expand_path(::Dir.pwd).gsub("\\", '/')
-          new_directory = ::File.expand_path(new_directory).gsub("\\", '/')
-          # do nothing if new directory is same as old directory
-          if new_directory == old_directory
-            new_directory = nil
-            old_directory = nil
-          else
-            # child process will inherit parent's working directory on creation.
-            ::Dir.chdir(new_directory)
-          end
         else
-          old_directory = nil
+          # resolve first token as an executable using PATH, etc.
+          cmd = cmd.to_s
+          delimiter = (cmd[0..0] == '"') ? '"' : ' '
+          if delimiter_offset = cmd.index(delimiter, 1)
+            token = cmd[0..delimiter_offset].strip
+            remainder = cmd[(delimiter_offset + 1)..-1].to_s.strip
+          else
+            token = cmd
+            remainder = ''
+          end
+          token = self.class.find_executable_in_path(token)
+          token = self.class.quoted_command_token(token)
+          if remainder.empty?
+            cmd = token
+          else
+            cmd = "#{token} #{remainder}"
+          end
         end
 
-        begin
+        # note that invoking Dir.chdir with a block when already inside a chdir
+        # block is okay but invoking it without a block may print an annoying
+        # warning to STDERR.
+        result = []
+        spawner = lambda do
           # launch cmd using native win32 implementation.
-          @stdin, @stdout, @stderr, @pid = ::RightScale::RightPopen.popen4(
+          result += ::RightScale::RightPopen.popen4(
             cmd,
             mode = 't',
             show_window = false,
             asynchronous_output = true,
             environment_strings)
-        ensure
-          ::Dir.chdir(old_directory) if old_directory
         end
+        if @options[:directory]
+          ::Dir.chdir(@options[:directory]) { spawner.call }
+        else
+          spawner.call
+        end
+        @stdin, @stdout, @stderr, @pid = result
         start_timer
         true
       rescue
@@ -185,6 +197,100 @@ module RightScale
           @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus, termsig)
         end
         @status
+      end
+
+      # Finds the given command name in the PATH. this emulates the 'which'
+      # command from linux (without the terminating newline). Supplies the
+      # executable file extension if missing.
+      #
+      # === Parameters
+      # @param [String] token to be qualified
+      #
+      # === Return
+      # @return [String] path to first matching executable file in PATH or nil
+      def self.find_executable_in_path(token)
+        # strip any surrounding double-quotes (single quotes are considered to
+        # be literals in Windows).
+        token = unquoted_command_token(token)
+        unless token.empty?
+          # note that File.executable? returns a false positive in Windows for
+          # directory paths, so only use File.file?
+          return executable_path(token) if File.file?(token)
+
+          # must search all known (executable) path extensions unless the
+          # explicit extension was given. this handles a case such as 'curl'
+          # which can either be on the path as 'curl.exe' or as a command shell
+          # shortcut called 'curl.cmd', etc.
+          use_path_extensions = 0 == File.extname(token).length
+          path_extensions = use_path_extensions ? (ENV['PATHEXT'] || '').split(/;/) : nil
+
+          # must check the current working directory first just to be completely
+          # sure what would happen if the command were executed. note that Linux
+          # ignores the CWD, so this is platform-specific behavior for Windows.
+          cwd = Dir.getwd
+          path = ENV['PATH']
+          path = (path.nil? || 0 == path.length) ? cwd : (cwd + ';' + path)
+          path.split(/;/).each do |dir|
+            # note that PATH elements are optionally double-quoted.
+            dir = unquoted_command_token(dir)
+            if use_path_extensions
+              path_extensions.each do |path_extension|
+                path = File.join(dir, token + path_extension)
+                return executable_path(path) if File.file?(path)
+              end
+            else
+              path = File.join(dir, token)
+              return executable_path(path) if File.file?(path)
+            end
+          end
+        end
+
+        # cannot be resolved.
+        return nil
+      end
+
+      # Determines if the given command token requires double-quotes.
+      #
+      # === Parameter
+      # @param [String] token
+      #
+      # === Return
+      # @return [String] quoted token or unchanged
+      def self.quoted_command_token(token)
+        token = "\"#{token}\"" if token[0..0] != '"' && token.index(' ')
+        token
+      end
+
+      # Determines if the given command token has double-quotes that need to be
+      # removed.
+      #
+      # === Parameter
+      # @param [String] token
+      #
+      # === Return
+      # @return [String] unquoted token or unchanged
+      def self.unquoted_command_token(token)
+        delimiter = '"'
+        if token[0..0] == delimiter
+          delimiter_offset = token.index(delimiter, delimiter.length)
+          if delimiter_offset
+            token = token[1..(delimiter_offset-1)].strip
+          else
+            token = token[1..-1].strip
+          end
+        end
+        token
+      end
+
+      # Makes a pretty path for executing a command in Windows.
+      #
+      # === Parameters
+      # @param [String] path to qualify
+      #
+      # === Return
+      # @return [String] fully qualified executable path
+      def self.executable_path(path)
+        ::File.expand_path(path).gsub('/', "\\")
       end
 
     end
