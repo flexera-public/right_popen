@@ -14,7 +14,7 @@ describe 'RightScale::RightPopen' do
   it "should correctly handle many small processes [async]" do
     pending 'Set environment variable TEST_STRESS to enable' unless ENV['TEST_STRESS']
     run_count = 100
-    command = is_windows? ? "cmd.exe /c exit 0" : "exit 0"
+    command = is_windows? ? ['cmd.exe', '/c', 'exit 0'] : ['sh', '-c', 'exit 0']
     @completed = 0
     @started = 0
     run_cmd = Proc.new do
@@ -57,7 +57,12 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should return the right status" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb'))}\" #{EXIT_STATUS}"
+        ruby = `which ruby`.chomp  # which is assumed to be on the PATH for the Windows case
+        command = [
+          ruby,
+          File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb')),
+          EXIT_STATUS
+        ]
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == EXIT_STATUS
         status.output_text.should == ''
@@ -67,7 +72,11 @@ describe 'RightScale::RightPopen' do
 
       it "should close all IO handlers, except STDIN, STDOUT and STDERR" do
         GC.start
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb'))}\" #{EXIT_STATUS}"
+        command = [
+          RUBY_CMD,
+          File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb')),
+          EXIT_STATUS
+        ]
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == EXIT_STATUS
         useless_handlers = 0
