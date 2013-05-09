@@ -141,34 +141,25 @@ module RightScale
           end
         end
 
-        # avoid calling Dir.chdir unless necessary because it prints annoying
-        # warnings on reentrance even when directory is same.
-        if new_directory = @options[:directory]
-          old_directory = ::File.expand_path(::Dir.pwd).gsub("\\", '/')
-          new_directory = ::File.expand_path(new_directory).gsub("\\", '/')
-          # do nothing if new directory is same as old directory
-          if new_directory == old_directory
-            new_directory = nil
-            old_directory = nil
-          else
-            # child process will inherit parent's working directory on creation.
-            ::Dir.chdir(new_directory)
-          end
-        else
-          old_directory = nil
-        end
-
-        begin
+        # note that invoking Dir.chdir with a block when already inside a chdir
+        # block is okay but invoking it without a block may print an annoying
+        # warning to STDERR.
+        result = []
+        spawner = lambda do
           # launch cmd using native win32 implementation.
-          @stdin, @stdout, @stderr, @pid = ::RightScale::RightPopen.popen4(
+          result += ::RightScale::RightPopen.popen4(
             cmd,
             mode = 't',
             show_window = false,
             asynchronous_output = true,
             environment_strings)
-        ensure
-          (::Dir.chdir(old_directory) rescue nil) if old_directory
         end
+        if @options[:directory]
+          ::Dir.chdir(@options[:directory]) { spawner.call }
+        else
+          spawner.call
+        end
+        @stdin, @stdout, @stderr, @pid = result
         start_timer
         true
       rescue
