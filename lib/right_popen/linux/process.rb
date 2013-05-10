@@ -129,7 +129,9 @@ module RightScale
             unless @options[:inherit_io]
               ::ObjectSpace.each_object(IO) do |io|
                 if ![::STDIN, ::STDOUT, ::STDERR, status_w].include?(io)
-                  io.close unless io.closed?
+                  # be careful to not allow streams in a bad state from the
+                  # parent process to prevent child process running.
+                  (io.close rescue nil) unless (io.closed? rescue true)
                 end
               end
             end
