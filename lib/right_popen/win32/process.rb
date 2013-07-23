@@ -141,9 +141,6 @@ module RightScale
           end
         end
 
-        # note that invoking Dir.chdir with a block when already inside a chdir
-        # block is okay but invoking it without a block may print an annoying
-        # warning to STDERR.
         result = []
         spawner = lambda do
           # launch cmd using native win32 implementation.
@@ -155,7 +152,18 @@ module RightScale
             environment_strings)
         end
         if @options[:directory]
-          ::Dir.chdir(@options[:directory]) { spawner.call }
+          # note that invoking Dir.chdir with a block when already inside a
+          # chdir block is can print an annoying warning to STDERR when paths
+          # differ under circumstances that are hard to define.
+          # case sensitivity? forward vs. backslash?
+          # anyway, do our own comparison to try and avoid this warning.
+          current_directory = ::Dir.pwd.gsub("\\", '/')
+          new_directory = ::File.expand_path(@options[:directory]).gsub("\\", '/')
+          if 0 == current_directory.casecmp(new_directory)
+            spawner.call
+          else
+            ::Dir.chdir(@options[:directory]) { spawner.call }
+          end
         else
           spawner.call
         end
