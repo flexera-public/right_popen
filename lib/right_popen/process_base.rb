@@ -223,7 +223,10 @@ module RightScale
                 data = dead ? channel.gets(nil) : channel.gets
                 if data
                   if key == :status_fd
-                    last_exception = ::Marshal.load(data)
+                    error_data = ::JSON.load(data)
+                    last_exception = ProcessError.new(
+                      "#{error_data['class']}: #{error_data['message']}")
+                    last_exception.set_backtrace(error_data['backtrace']) if error_data['backtrace']
                   else
                     @target.method(key).call(data)
                   end
@@ -242,19 +245,10 @@ module RightScale
             end
           end
           wait_for_exit_status
+          raise last_exception if last_exception
           @target.timeout_handler if timer_expired?
           @target.size_limit_handler if size_limit_exceeded?
           @target.exit_handler(@status)
-
-          # re-raise exception from fork, if any.
-          case last_exception
-          when nil
-            # all good
-          when ::Exception
-            raise last_exception
-          else
-            raise "Unknown failure: saw #{last_exception.inspect} on status channel."
-          end
         ensure
           # abandon will not close I/O objects; caller takes responsibility via
           # process object passed to watch_handler. if anyone calls interrupt
@@ -295,8 +289,7 @@ module RightScale
               next_interrupt = sigs.first
             end
             unless next_interrupt
-              raise ::RightScale::RightPopen::ProcessBase::ProcessError
-                    'Unable to kill child process'
+              raise ProcessError, 'Unable to kill child process'
             end
             @last_interrupt = next_interrupt
 

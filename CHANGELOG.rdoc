@@ -1,0 +1,8 @@
+== 1.0
+
+Initial release with support for Linux and Windows (mswin but not mingw).
+
+== 2.0
+
+Removed some deprecated classes.
+Fixed issue with 'fcntl' not always being loaded before calling popen.

@@ -23,33 +23,7 @@
 
 require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'target_proxy'))
 
-# TEAL FIX: this seems like test harness code smell, not production code. it
-# should be removed in next major revision. unfortunately we cannot remove these
-# require statements without breaking any code that depends on them.
-unless RUBY_PLATFORM =~ /mswin|mingw/
-  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'accumulator'))
-  require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'linux', 'utilities'))
-end
-
 module RightScale
-
-  # see popen3_async for details.
-  #
-  # @deprecated in favor of sync vs. async methods in RightPopen namespace.
-  #
-  # === Parameters
-  # @param [Hash] options for execution
-  #
-  # === Returns
-  # @return [TrueClass] always true
-  def self.popen3(options)
-    warn 'WARNING: RightScale.popen3 is deprecated in favor of RightScale::RightPopen.popen3_async'
-    options = options.dup
-    cmd = options.dup.delete(:command)
-    raise ::ArgumentError.new("Missing command") unless cmd
-    ::RightScale::RightPopen.popen3_async(options[:command], options)
-  end
-
   module RightPopen
 
     # see popen3_async for details.

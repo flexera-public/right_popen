@@ -26,15 +26,6 @@ module RightScale
   # helper classes for the win32 implementation of RightPopen.
   module RightPopenEx
 
-    # @deprecated because custom status is not specific to win32 platform.
-    class Status < ::RightScale::RightPopen::ProcessStatus
-
-      def initialize(pid, exitstatus)
-        super(pid, exitstatus)
-        warn "WARNING: RightScale::RightPopenEx::Status is deprecated in favor of ::RightScale::RightPopen::ProcessStatus"
-      end
-    end
-
     # Key class for case-insensitive hash insertion/lookup.
     class NoCaseKey
       # Internal key

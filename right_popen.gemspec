@@ -48,6 +48,7 @@ EOF
   spec.files = candidates.sort!
 
   # Current implementation supports >= 1.0.0
+  spec.add_runtime_dependency('json', '>= 1.4')
   spec.add_development_dependency(%q<eventmachine>, [">= 1.0.0"])
   if is_windows
     spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])

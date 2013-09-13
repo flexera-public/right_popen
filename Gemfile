@@ -10,6 +10,8 @@ group :custom do
   gem 'eventmachine', '~> 1.0.0.3'
 end
 
+gem "json", "1.4.6"  # locked for mswin32 friendliness
+
 group :windows do
   platform :mswin do
     gem 'win32-api',     '1.4.5'
