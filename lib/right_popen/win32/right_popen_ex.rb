@@ -90,10 +90,18 @@ module RightScale
       # system account's (default user profile) registry values are not
       # appropriate for merging, so skip it when we know we are the system.
       current_user_name = (`whoami`.chomp rescue '')
-      merge_environment2(current_user_environment_hash, result_environment_hash) unless current_user_name == 'nt authority\system'
+      unless current_user_name == 'nt authority\system'
+        merge_environment2(current_user_environment_hash, result_environment_hash)
+      end
 
       # caller's environment supercedes all.
       merge_environment2(environment_hash, result_environment_hash)
+
+      # remove any env vars that were expliclty set to nil by caller after
+      # merging from all sources.
+      environment_hash.each do |k,v|
+        result_environment_hash.delete(NoCaseKey.new(k)) if v.nil?
+      end
 
       return environment_hash_to_string_block(result_environment_hash)
     end

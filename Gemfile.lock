@@ -3,6 +3,9 @@ PATH
   specs:
     right_popen (2.0.0)
       json (>= 1.4)
+    right_popen (2.0.0-x86-mswin32)
+      json (>= 1.4)
+      win32-process (>= 0.6.1)
 
 GEM
   remote: http://s3.amazonaws.com/rightscale_rightlink_gems_dev/

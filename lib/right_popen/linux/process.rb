@@ -164,7 +164,7 @@ module RightScale
             environment_hash['LC_ALL'] = 'C' if @options[:locale]
             environment_hash.merge!(@options[:environment]) if @options[:environment]
             environment_hash.each do |key, value|
-              ::ENV[key.to_s] = value.to_s if value
+              ::ENV[key.to_s] = value.nil? ? nil: value.to_s
             end
 
             if cmd.kind_of?(Array)
