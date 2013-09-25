@@ -1,5 +1,7 @@
 = RightPopen
 
+Maintained by the RightScale Teal Team
+
 == DESCRIPTION
 
 === Synopsis

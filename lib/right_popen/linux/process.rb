@@ -22,6 +22,8 @@
 #++
 
 require 'etc'
+require 'fcntl'
+require 'yaml'
 
 require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_base'))
 require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_status'))
@@ -162,7 +164,7 @@ module RightScale
             environment_hash['LC_ALL'] = 'C' if @options[:locale]
             environment_hash.merge!(@options[:environment]) if @options[:environment]
             environment_hash.each do |key, value|
-              ::ENV[key.to_s] = value.to_s if value
+              ::ENV[key.to_s] = value.nil? ? nil: value.to_s
             end
 
             if cmd.kind_of?(Array)
@@ -173,7 +175,14 @@ module RightScale
             end
             raise 'Unreachable code'
           rescue ::Exception => e
-            ::Marshal.dump(e, status_w)
+            # note that Marshal.dump/load isn't reliable for all kinds of
+            # exceptions or else can be truncated by I/O buffering.
+            error_data = {
+              'class' => e.class.name,
+              'message' => e.message,
+              'backtrace' => e.backtrace
+            }
+            status_w.puts(::YAML.dump(error_data))
           end
           status_w.close
           exit!
@@ -195,23 +204,6 @@ module RightScale
         safe_close_io
         @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
         raise
-      end
-
-      # @deprecated this seems like test harness code smell, not production code.
-      def wait_for_exec
-        warn 'WARNING: RightScale::RightPopen::Process#wait_for_exec is deprecated in lib and will be moved to spec'
-        begin
-          e = ::Marshal.load(@status_fd)
-          # thus meaning that the process failed to exec...
-          @stdin.close
-          @stdout.close
-          @stderr.close
-          raise(Exception === e ? e : "unknown failure!")
-        rescue EOFError
-          # thus meaning that the process did exec and we can continue.
-        ensure
-          @status_fd.close
-        end
       end
 
       private

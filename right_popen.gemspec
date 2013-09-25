@@ -50,7 +50,8 @@ EOF
   # Current implementation supports >= 1.0.0
   spec.add_development_dependency(%q<eventmachine>, [">= 1.0.0"])
   if is_windows
-    spec.add_runtime_dependency(%q<win32-process>, [">= 0.6.1"])
+    spec.add_runtime_dependency('win32-api', '1.4.5')
+    spec.add_runtime_dependency('win32-process', '0.6.1')
   end
   spec.add_development_dependency('rspec', "~> 1.3")
   spec.add_development_dependency('rake', "~> 0.8.7")
