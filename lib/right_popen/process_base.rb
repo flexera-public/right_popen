@@ -22,6 +22,7 @@
 #++
 
 require 'thread'
+require 'yaml'
 
 module RightScale
   module RightPopen
@@ -223,7 +224,7 @@ module RightScale
                 data = dead ? channel.gets(nil) : channel.gets
                 if data
                   if key == :status_fd
-                    error_data = ::JSON.load(data)
+                    error_data = ::YAML.load(data)
                     last_exception = ProcessError.new(
                       "#{error_data['class']}: #{error_data['message']}")
                     last_exception.set_backtrace(error_data['backtrace']) if error_data['backtrace']

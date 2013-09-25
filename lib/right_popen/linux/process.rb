@@ -23,7 +23,7 @@
 
 require 'etc'
 require 'fcntl'
-require 'json'
+require 'yaml'
 
 require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_base'))
 require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_status'))
@@ -182,7 +182,7 @@ module RightScale
               'message' => e.message,
               'backtrace' => e.backtrace
             }
-            status_w.puts(::JSON.dump(error_data))
+            status_w.puts(::YAML.dump(error_data))
           end
           status_w.close
           exit!
