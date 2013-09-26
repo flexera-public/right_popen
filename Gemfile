@@ -1,8 +1,6 @@
 source 'http://s3.amazonaws.com/rightscale_rightlink_gems_dev'
 source 'https://rubygems.org'
 
-gemspec
-
 # We have custom builds of some gems containing fixes and patches that are specific
 # to RightScale. Gems in the "custom" group are published by RightScale to our
 # custom gem repository (http://s3.amazonaws.com/rightscale_rightlink_gems_dev).

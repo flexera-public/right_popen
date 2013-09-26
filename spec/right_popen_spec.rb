@@ -185,6 +185,24 @@ describe 'RightScale::RightPopen' do
         status.pid.should > 0
       end
 
+      it "should clear environment variables" do
+        begin
+          ENV['__test__'] = '42'
+          old_envs = {}
+          ENV.each { |k, v| old_envs[k] = v }
+          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+          status = runner.run_right_popen3(synchronicity, command, :env=>{ :__test__ => nil })
+          status.status.exitstatus.should == 0
+          status.output_text.should include('PATH')
+          status.output_text.should_not include('_test_')
+          ENV.each { |k, v| old_envs[k].should == v }
+          old_envs.each { |k, v| ENV[k].should == v }
+          status.pid.should > 0
+        ensure
+          ENV.delete('__test__')
+        end
+      end
+
       it "should restore environment variables" do
         begin
           ENV['__test__'] = '41'
@@ -304,7 +322,7 @@ describe 'RightScale::RightPopen' do
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>2)
         runner_status.output_text.should be_empty
-        runner_status.error_text.should == "Closing stdout\n"
+        runner_status.error_text.should =~ /Closing stdout\n/
         runner_status.did_timeout.should be_true
       end
 

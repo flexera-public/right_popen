@@ -23,6 +23,6 @@
 
 module RightScale
   module RightPopen
-    VERSION = "1.1.3"
+    VERSION = '2.0.0'
   end
 end
