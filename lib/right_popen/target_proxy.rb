@@ -21,6 +21,9 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
+require 'rubygems'
+require 'right_popen'
+
 module RightScale
   module RightPopen
 

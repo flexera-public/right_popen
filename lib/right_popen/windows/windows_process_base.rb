@@ -21,53 +21,17 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require 'win32/process'
-
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_base'))
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_status'))
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), 'right_popen_ex'))
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', '..', 'win32', 'right_popen.so'))  # win32 native code
+require 'rubygems'
+require 'right_popen'
+require 'right_popen/process_base'
+require 'right_popen/windows/utilities'
 
 module RightScale
   module RightPopen
-    class Process < ProcessBase
+    class WindowsProcessBase < ::RightScale::RightPopen::ProcessBase
 
-      def initialize(options={})
-        super(options)
-      end
-
-      # Determines if the process is still running.
-      #
-      # === Return
-      # @return [TrueClass|FalseClass] true if running
-      def alive?
-        raise ProcessError.new('Process not started') unless @pid
-        unless @status
-          # note that ::Process.kill(0, pid) is unreliable from win32-process
-          # gem because it can returns a false positive if called before and
-          # then after process termination.
-          handle = ::Windows::Process::OpenProcess.call(
-            desired_access = ::Windows::Process::PROCESS_ALL_ACCESS,
-            inherit_handle = 0,
-            @pid)
-          alive = false
-          if handle != ::Windows::Handle::INVALID_HANDLE_VALUE
-            begin
-              # immediate check (zero milliseconds) to see if process handle is
-              # signalled (i.e. terminated). the process remains signalled after
-              # termination and can be checked repeatedly in this manner (until
-              # the OS recycles the PID at an unspecified time later).
-              result = ::Windows::Synchronize::WaitForSingleObject.call(
-                handle,
-                milliseconds = 0)
-              alive = result == ::Windows::Synchronize::WAIT_TIMEOUT
-            ensure
-              ::Windows::Handle::CloseHandle.call(handle)
-            end
-          end
-          wait_for_exit_status unless alive
-        end
-        @status.nil?
+      def initialize(*args)
+        super
       end
 
       # Windows must drain all streams on child death in order to ensure all
@@ -108,7 +72,10 @@ module RightScale
 
         # merge and format environment strings, if necessary.
         environment_hash = @options[:environment] || {}
-        environment_strings = ::RightScale::RightPopenEx.merge_environment(environment_hash)
+        environment_hash = ::RightScale::Windows::Utilities.merge_environment(
+          environment_hash,
+          current_user_environment_hash,
+          machine_environment_hash)
 
         # resolve command string from array, if necessary.
         if cmd.kind_of?(::Array)
@@ -143,13 +110,8 @@ module RightScale
 
         result = []
         spawner = lambda do
-          # launch cmd using native win32 implementation.
-          result += ::RightScale::RightPopen.popen4(
-            cmd,
-            mode = 't',
-            show_window = false,
-            asynchronous_output = true,
-            environment_strings)
+          # launch cmd using native implementation.
+          result += popen4_impl(cmd, environment_hash)
         end
         if @options[:directory]
           # note that invoking Dir.chdir with a block when already inside a
@@ -174,37 +136,17 @@ module RightScale
         # catch-all for failure to spawn process ensuring a non-nil status. the
         # PID most likely is nil but the exit handler can be invoked for async.
         safe_close_io
-        @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
+        @status ||= ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
         raise
       end
 
-      # blocks waiting for process exit status.
+      # Performs an asynchronous (non-blocking) read on the given I/O object.
       #
-      # === Return
-      # @return [ProcessStatus] exit status
-      def wait_for_exit_status
-        raise ProcessError.new('Process not started') unless @pid
-        unless @status
-          exitstatus = 0
-          begin
-            # note that win32-process gem doesn't support the no-hang parameter
-            # and returns exit code instead of status.
-            ignored, exitstatus = ::Process.waitpid2(@pid)
-          rescue Process::Error
-            # process is gone, which means we have no recourse to retrieve the
-            # actual exit code.
-          end
-
-          # an interrupted process can still return zero exit status; if we
-          # interrupted it then don't treat it as successful. simulate the Linux
-          # termination signal behavior here.
-          if interrupted?
-            exitstatus = nil
-            termsig = @last_interrupt
-          end
-          @status = ::RightScale::RightPopen::ProcessStatus.new(@pid, exitstatus, termsig)
-        end
-        @status
+      # @param [IO] io to read
+      #
+      # @return [String] bytes read or empty to try again or nil to indicate EOF
+      def async_read(io)
+        raise NotImplementedError, 'Must be overridden'
       end
 
       # Finds the given command name in the PATH. this emulates the 'which'
@@ -301,6 +243,34 @@ module RightScale
         ::File.expand_path(path).gsub('/', "\\")
       end
 
+      protected
+
+      # spawns a child process and returns I/O and process identifier (PID).
+      #
+      # @param [String] cmd to execute
+      # @param [Hash] environment_hash for child process environment
+      #
+      # @return [Array] tuple of [stdin,stdout,stderr,pid]
+      def popen4_impl(cmd, environment_hash)
+        raise NotImplementedError, 'Must be overridden'
+      end
+
+      # Queries the environment strings from the current thread/process user's
+      # environment. The resulting hash represents any variables set for the
+      # persisted user context but any set dynamically in the current process
+      # context.
+      #
+      # @return [Hash] map of environment key (String) to value (String)
+      def current_user_environment_hash
+        raise NotImplementedError, 'Must be overridden'
+      end
+
+      # Queries the environment strings from the machine's environment.
+      #
+      # @return [Hash] map of environment key (String) to value (String)
+      def machine_environment_hash
+        raise NotImplementedError, 'Must be overridden'
+      end
     end
   end
 end

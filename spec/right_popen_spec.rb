@@ -5,8 +5,8 @@ require 'stringio'
 require 'tmpdir'
 
 describe 'RightScale::RightPopen' do
-  def is_windows?
-    return !!(RUBY_PLATFORM =~ /mswin|mingw/)
+  def windows?
+    ::RightScale::RightPopen::SpecHelper.windows?
   end
 
   let(:runner) { ::RightScale::RightPopen::Runner.new }
@@ -14,7 +14,7 @@ describe 'RightScale::RightPopen' do
   it "should correctly handle many small processes [async]" do
     pending 'Set environment variable TEST_STRESS to enable' unless ENV['TEST_STRESS']
     run_count = 100
-    command = is_windows? ? ['cmd.exe', '/c', 'exit 0'] : ['sh', '-c', 'exit 0']
+    command = windows? ? ['cmd.exe', '/c', 'exit 0'] : ['sh', '-c', 'exit 0']
     @completed = 0
     @started = 0
     run_cmd = Proc.new do
@@ -220,7 +220,7 @@ describe 'RightScale::RightPopen' do
         end
       end
 
-      if is_windows?
+      if ::RightScale::RightPopen::SpecHelper.windows?
         # FIX: this behavior is currently specific to Windows but should probably be
         # implemented for Linux.
         it "should merge the PATH variable instead of overriding it" do
@@ -253,7 +253,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should support raw command arguments" do
-        command = is_windows? ? ["cmd.exe", "/c", "echo", "*"] : ["echo", "*"]
+        command = windows? ? ["cmd.exe", "/c", "echo", "*"] : ["echo", "*"]
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
         status.output_text.should == "*\n"
@@ -318,7 +318,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should handle child processes that close stdout but keep running" do
-        pending 'not implemented for windows' if is_windows? && :sync != synchronicity
+        pending 'not implemented for windows' if windows? && :sync != synchronicity
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>2)
         runner_status.output_text.should be_empty
@@ -327,7 +327,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should handle child processes that spawn long running background processes" do
-        pending 'not implemented for windows' if is_windows?
+        pending 'not implemented for windows' if windows?
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0

@@ -21,16 +21,16 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
+require 'rubygems'
 require 'etc'
 require 'fcntl'
 require 'yaml'
-
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_base'))
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'process_status'))
+require 'right_popen'
+require 'right_popen/process_base'
 
 module RightScale
   module RightPopen
-    class Process < ProcessBase
+    class Process < ::RightScale::RightPopen::ProcessBase
 
       def initialize(options={})
         super(options)

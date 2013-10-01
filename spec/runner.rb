@@ -21,6 +21,9 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
+require 'rubygems'
+require 'eventmachine'
+
 module RightScale
   module RightPopen
     class Runner

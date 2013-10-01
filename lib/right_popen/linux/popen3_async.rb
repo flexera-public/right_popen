@@ -22,9 +22,8 @@
 #++
 
 require 'rubygems'
+require 'right_popen'
 require 'eventmachine'
-
-require File.expand_path(File.join(File.dirname(__FILE__), "process"))
 
 module RightScale::RightPopen
 

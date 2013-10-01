@@ -21,13 +21,17 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require File.expand_path(File.join(File.dirname(__FILE__), 'right_popen', 'target_proxy'))
-
 module RightScale
   module RightPopen
 
+    # autoloads
+    autoload :ProcessStatus, 'right_popen/process_status'
+    autoload :SafeOutputBuffer, 'right_popen/safe_output_buffer'
+    autoload :TargetProxy, 'right_popen/target_proxy'
+
     # see popen3_async for details.
     DEFAULT_POPEN3_OPTIONS = {
+      :directory        => nil,
       :environment      => nil,
       :exit_handler     => nil,
       :group            => nil,
@@ -54,15 +58,36 @@ module RightScale
     # === Return
     # @return [TrueClass] always true
     def self.require_popen3_impl(synchronicity)
+      # implementation of Process is specific to platform.
       case RUBY_PLATFORM
       when /mswin/
-        platform = 'win32'
+        platform_subdir = 'windows'
+        impl_subdir = ::File.join(platform_subdir, 'mswin')
       when /mingw/
-        platform = 'mingw'
+        platform_subdir = 'windows'
+        impl_subdir = ::File.join(platform_subdir, 'mingw')
+      when /win32|dos|cygwin/
+        raise NotImplementedError
       else
-        platform = 'linux'
+        platform_subdir = 'linux'
+        impl_subdir = platform_subdir
       end
-      require ::File.expand_path(::File.join(::File.dirname(__FILE__), 'right_popen', platform, synchronicity.to_s))
+      impl_module = ::File.join(impl_subdir, 'process')
+
+      # only require EM when async is requested.
+      case synchronicity
+      when :popen3_sync
+        sync_module = 'popen3_sync'
+      when :popen3_async
+        sync_module = ::File.join(platform_subdir, 'popen3_async')
+      else
+        fail 'unexpected synchronicity'
+      end
+
+      # platform-specific requires.
+      base_dir = ::File.join(::File.dirname(__FILE__), 'right_popen').gsub("\\", '/')
+      require ::File.expand_path(impl_module, base_dir)
+      require ::File.expand_path(sync_module, base_dir)
     end
 
     # Spawns a process to run given command synchronously. This is similar to
@@ -103,6 +128,7 @@ module RightScale
     #
     # === Parameters
     # @param [Hash] options for execution
+    # @option options [String] :directory as initial working directory for child process or nil to inherit current working directory
     # @option options [Hash] :environment variables values keyed by name
     # @option options [Symbol] :exit_handler target method called on exit
     # @option options [Integer|String] :group or gid for forked process (linux only)

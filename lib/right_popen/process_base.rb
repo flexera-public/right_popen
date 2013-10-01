@@ -21,6 +21,8 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
+require 'rubygems'
+require 'right_popen'
 require 'thread'
 require 'yaml'
 
@@ -147,6 +149,7 @@ module RightScale
         @status = nil
         @last_interrupt = nil
         @channels_to_finish = nil
+        @wait_thread = nil
 
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
