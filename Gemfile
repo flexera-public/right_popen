@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 # to RightScale. Gems in the "custom" group are published by RightScale to our
 # custom gem repository (http://s3.amazonaws.com/rightscale_rightlink_gems_dev).
 group :custom do
-  gem 'eventmachine', '~> 1.0.0.3'
+  gem 'eventmachine', '~> 1.0.0.4'
 end
 
 group :development do
