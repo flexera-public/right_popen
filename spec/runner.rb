@@ -94,11 +94,13 @@ module RightScale
           :expect_size_limit => false
         }.merge(runner_options)
         popen3_options = {
-          :input              => runner_options[:input],
-          :environment        => runner_options[:env],
-          :timeout_seconds    => runner_options.has_key?(:timeout) ? runner_options[:timeout] : 2,
-          :size_limit_bytes   => runner_options[:size_limit_bytes],
-          :watch_directory    => runner_options[:watch_directory]
+          :input            => runner_options[:input],
+          :environment      => runner_options[:env],
+          :timeout_seconds  => runner_options.has_key?(:timeout) ? runner_options[:timeout] : 2,
+          :size_limit_bytes => runner_options[:size_limit_bytes],
+          :watch_directory  => runner_options[:watch_directory],
+          :user             => runner_options[:user],
+          :group            => runner_options[:group],
         }
         case synchronicity
         when :sync
@@ -111,53 +113,45 @@ module RightScale
       end
 
       def run_right_popen3_sync(command, runner_options, popen3_options, &callback)
-        begin
-          @iterations = 0
-          @repeats = runner_options[:repeats]
-          @stats = []
-          while @iterations < @repeats
-            @iterations += 1
-            do_right_popen3_sync(command, runner_options, popen3_options) do |runner_status|
-              @stats << runner_status
-              callback.call(runner_status) if callback
-              if @repeats > 1
-                puts if 1 == (@iterations % 64)
-                print '+'
-                puts if @iterations == @repeats
-              end
+        @iterations = 0
+        @repeats = runner_options[:repeats]
+        @stats = []
+        while @iterations < @repeats
+          @iterations += 1
+          do_right_popen3_sync(command, runner_options, popen3_options) do |runner_status|
+            @stats << runner_status
+            callback.call(runner_status) if callback
+            if @repeats > 1
+              puts if 1 == (@iterations % 64)
+              print '+'
+              puts if @iterations == @repeats
             end
           end
-          @stats.uniq!
-          @stats.size < 2 ? @stats.first : @stats
-        rescue Exception => e
-          puts "\n** Failed: #{e.message} FROM\n#{e.backtrace.join("\n")}"
-          raise e
         end
+        @stats.uniq!
+        @stats.size < 2 ? @stats.first : @stats
       end
 
       def run_right_popen3_async(command, runner_options, popen3_options, &callback)
-        begin
-          @iterations = 0
-          @repeats = runner_options[:repeats]
-          @stats = []
-          EM.run do
-            EM.defer do
-              begin
-                do_right_popen3_async(command, runner_options, popen3_options) do |runner_status|
-                  maybe_continue_popen3_async(runner_status, command, runner_options, popen3_options, &callback)
-                end
-              rescue Exception => e
-                puts e.class, e.message, e.backtrace.join("\n")
-                EM.stop
+        @iterations = 0
+        @repeats = runner_options[:repeats]
+        @stats = []
+        last_exception = nil
+        EM.run do
+          EM.defer do
+            begin
+              do_right_popen3_async(command, runner_options, popen3_options) do |runner_status|
+                last_exception ||= maybe_continue_popen3_async(runner_status, command, runner_options, popen3_options, &callback)
               end
+            rescue Exception => e
+              last_exception = e
+              EM.stop
             end
           end
-          @stats.uniq!
-          @stats.size < 2 ? @stats.first : @stats
-        rescue Exception => e
-          puts "\n** Failed: #{e.message} FROM\n#{e.backtrace.join("\n")}"
-          raise e
         end
+        raise last_exception if last_exception
+        @stats.uniq!
+        @stats.size < 2 ? @stats.first : @stats
       end
 
       def do_right_popen3(synchronicity, command, runner_options, popen3_options, &callback)
@@ -195,6 +189,7 @@ module RightScale
         @iterations += 1
         @stats << runner_status
         callback.call(runner_status) if callback
+        last_exception = nil
         if @iterations < @repeats
           if @repeats > 1
             puts if 1 == (@iterations % 64)
@@ -204,16 +199,17 @@ module RightScale
           EM.defer do
             begin
               do_right_popen3_async(command, runner_options, popen3_options) do |runner_status2|
-                maybe_continue_popen3_async(runner_status2, command, runner_options, popen3_options, &callback)
+                last_exception ||= maybe_continue_popen3_async(runner_status2, command, runner_options, popen3_options, &callback)
               end
             rescue Exception => e
-              puts e.class, e.message, e.backtrace.join("\n")
+              last_exception = e
               EM.stop
             end
           end
         else
           EM.stop
         end
+        last_exception
       end
     end
   end

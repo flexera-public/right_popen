@@ -37,7 +37,9 @@ module RightScale
 
       # Implements ProcessBase#alive?
       def alive?
-        raise ProcessError.new('Process not started') unless @wait_thread
+        unless @wait_thread
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           # the wait thread is blocked on the child process handle so we only
           # need to ask if the thread is still alive.
@@ -49,7 +51,9 @@ module RightScale
 
       # Implements ProcessBase#wait_for_exit_status
       def wait_for_exit_status
-        raise ProcessError.new('Process not started') unless @wait_thread
+        unless @wait_thread
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           # block on the thread until it dies (due to child process death).
           @status = @wait_thread.value

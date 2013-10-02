@@ -1,6 +1,7 @@
 require File.expand_path(File.join(File.dirname(__FILE__), 'spec_helper'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'runner'))
 
+require 'right_popen'
 require 'stringio'
 require 'tmpdir'
 
@@ -344,6 +345,20 @@ describe 'RightScale::RightPopen' do
         runner_status.output_text.should == "To sleep... 0\nTo sleep... 1\nTo sleep... 2\nTo sleep... 3\nThe sleeper must awaken.\n"
         runner_status.error_text.should == "Perchance to dream... 0\nPerchance to dream... 1\nPerchance to dream... 2\nPerchance to dream... 3\n"
       end
+
+      it 'should fail to run as missing user' do
+        command = windows? ? ['cmd.exe', '/c', 'whoami'] : ['whoami']
+        trial = lambda { runner.run_right_popen3(synchronicity, command, :user => 'nosuchuser') }
+        if windows?
+          expect(&trial).to raise_exception(::NotImplementedError)
+        else
+          expect(&trial).to raise_exception(::RightScale::RightPopen::ProcessError, /nosuchuser/)
+        end
+
+        # TEAL FIX: difficult to create a positive test without sudo privileges
+        # or mocking out the relevant behavior.
+      end
+
     end
   end
 end

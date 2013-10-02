@@ -32,6 +32,9 @@ module RightScale
 
       def initialize(*args)
         super
+        if @options[:user] || @options[:group]
+          raise NotImplementedError, 'Run as user/group is not implemented for Windows'
+        end
       end
 
       # Windows must drain all streams on child death in order to ensure all

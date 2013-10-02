@@ -41,7 +41,9 @@ module RightScale
       # === Return
       # @return [TrueClass|FalseClass] true if running
       def alive?
-        raise ProcessError.new('Process not started') unless @pid
+        unless @pid
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           begin
             ignored, status = ::Process.waitpid2(@pid, ::Process::WNOHANG)
@@ -74,7 +76,9 @@ module RightScale
       # === Return
       # @return [ProcessStatus] exit status
       def wait_for_exit_status
-        raise ProcessError.new('Process not started') unless @pid
+        unless @pid
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           begin
             ignored, status = ::Process.waitpid2(@pid)

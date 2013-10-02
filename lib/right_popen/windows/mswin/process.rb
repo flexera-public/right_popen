@@ -38,7 +38,9 @@ module RightScale
 
       # Implements ProcessBase#alive?
       def alive?
-        raise ProcessError.new('Process not started') unless @pid
+        unless @pid
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           # note that ::Process.kill(0, pid) is unreliable from win32-process
           # gem because it can returns a false positive if called before and
@@ -69,7 +71,9 @@ module RightScale
 
       # Implements ProcessBase#wait_for_exit_status
       def wait_for_exit_status
-        raise ProcessError.new('Process not started') unless @pid
+        unless @pid
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         unless @status
           exitstatus = 0
           begin

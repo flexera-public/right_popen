@@ -24,6 +24,9 @@
 module RightScale
   module RightPopen
 
+    # exceptions
+    class ProcessError < Exception; end
+
     # autoloads
     autoload :ProcessStatus, 'right_popen/process_status'
     autoload :SafeOutputBuffer, 'right_popen/safe_output_buffer'
