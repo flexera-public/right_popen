@@ -38,7 +38,15 @@ task :win_clean do
         sh 'nmake distclean'
       end
     end
-    rm 'lib/mswin/right_popen.so' if File.file?('lib/mswin/right_popen.so')
+
+    # remove v1.x binary directory.
+    legacy_dir = 'lib/win32'
+    ::FileUtils.rm_rf(legacy_dir) if ::File.directory?(legacy_dir)
+
+    # remove current binary for mswin.
+    binary_dir = 'lib/right_popen/windows/mswin'
+    binary_path = ::File.join(binary_dir, 'right_popen.so')
+    ::File.unlink(binary_path) if ::File.file?(binary_path)
   end
 end
 task :clean => :win_clean
@@ -50,15 +58,7 @@ task :build => [:clean] do
       ruby 'extconf.rb'
       sh 'nmake'
     end
-
-    # remove v1.x binary directory.
-    legacy_dir = 'lib/win32'
-    ::FileUtils.rm_rf(legacy_dir) if ::File.directory?(legacy_dir)
-
-    # binary now lives side-by-side with 'process.rb' for mswin.
     binary_dir = 'lib/right_popen/windows/mswin'
-    binary_path = ::File.join(binary_dir, 'right_popen.so')
-    ::File.unlink(binary_path) if ::File.file?(binary_path)
     mv 'ext/right_popen.so', binary_dir
   end
 end
