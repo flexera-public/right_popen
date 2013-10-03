@@ -1,12 +1,13 @@
 require File.expand_path(File.join(File.dirname(__FILE__), 'spec_helper'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'runner'))
 
+require 'right_popen'
 require 'stringio'
 require 'tmpdir'
 
 describe 'RightScale::RightPopen' do
-  def is_windows?
-    return !!(RUBY_PLATFORM =~ /mswin|mingw/)
+  def windows?
+    ::RightScale::RightPopen::SpecHelper.windows?
   end
 
   let(:runner) { ::RightScale::RightPopen::Runner.new }
@@ -14,7 +15,7 @@ describe 'RightScale::RightPopen' do
   it "should correctly handle many small processes [async]" do
     pending 'Set environment variable TEST_STRESS to enable' unless ENV['TEST_STRESS']
     run_count = 100
-    command = is_windows? ? ['cmd.exe', '/c', 'exit 0'] : ['sh', '-c', 'exit 0']
+    command = windows? ? ['cmd.exe', '/c', 'exit 0'] : ['sh', '-c', 'exit 0']
     @completed = 0
     @started = 0
     run_cmd = Proc.new do
@@ -68,6 +69,22 @@ describe 'RightScale::RightPopen' do
         status.output_text.should == ''
         status.error_text.should == ''
         status.pid.should > 0
+      end
+
+      if ::RightScale::RightPopen::SpecHelper.windows?
+        it "should return the right status for Windows" do
+          # Windows does not adhere to the Linux semantic of masking off any
+          # exit code value above the low word. it is important that the real
+          # exit code be relayed via exitstatus on Windows only.
+          high_word_exit_code = 3 * 256
+          command = "cmd.exe /c exit #{high_word_exit_code}"
+          status = runner.run_right_popen3(synchronicity, command)
+          status.status.exitstatus.should == high_word_exit_code
+          status.status.success?.should be_false
+          status.output_text.should == ''
+          status.error_text.should == ''
+          status.pid.should > 0
+        end
       end
 
       it "should close all IO handlers, except STDIN, STDOUT and STDERR" do
@@ -220,7 +237,7 @@ describe 'RightScale::RightPopen' do
         end
       end
 
-      if is_windows?
+      if ::RightScale::RightPopen::SpecHelper.windows?
         # FIX: this behavior is currently specific to Windows but should probably be
         # implemented for Linux.
         it "should merge the PATH variable instead of overriding it" do
@@ -253,7 +270,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should support raw command arguments" do
-        command = is_windows? ? ["cmd.exe", "/c", "echo", "*"] : ["echo", "*"]
+        command = windows? ? ["cmd.exe", "/c", "echo", "*"] : ["echo", "*"]
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
         status.output_text.should == "*\n"
@@ -318,7 +335,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should handle child processes that close stdout but keep running" do
-        pending 'not implemented for windows' if is_windows? && :sync != synchronicity
+        pending 'not implemented for windows' if windows? && :sync != synchronicity
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>2)
         runner_status.output_text.should be_empty
@@ -327,7 +344,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should handle child processes that spawn long running background processes" do
-        pending 'not implemented for windows' if is_windows?
+        pending 'not implemented for windows' if windows?
         command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
@@ -344,6 +361,20 @@ describe 'RightScale::RightPopen' do
         runner_status.output_text.should == "To sleep... 0\nTo sleep... 1\nTo sleep... 2\nTo sleep... 3\nThe sleeper must awaken.\n"
         runner_status.error_text.should == "Perchance to dream... 0\nPerchance to dream... 1\nPerchance to dream... 2\nPerchance to dream... 3\n"
       end
+
+      it 'should fail to run as missing user' do
+        command = windows? ? ['cmd.exe', '/c', 'whoami'] : ['whoami']
+        trial = lambda { runner.run_right_popen3(synchronicity, command, :user => 'nosuchuser') }
+        if windows?
+          expect(&trial).to raise_exception(::NotImplementedError)
+        else
+          expect(&trial).to raise_exception(::RightScale::RightPopen::ProcessError, /nosuchuser/)
+        end
+
+        # TEAL FIX: difficult to create a positive test without sudo privileges
+        # or mocking out the relevant behavior.
+      end
+
     end
   end
 end

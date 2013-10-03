@@ -1,5 +1,4 @@
 require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', 'spec_helper'))
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), '..', '..', 'lib', 'right_popen', 'safe_output_buffer'))
 
 describe RightScale::RightPopen::SafeOutputBuffer do
 

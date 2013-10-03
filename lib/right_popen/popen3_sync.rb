@@ -21,7 +21,8 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require File.expand_path(File.join(File.dirname(__FILE__), "process"))
+require 'rubygems'
+require 'right_popen'
 
 module RightScale::RightPopen
 

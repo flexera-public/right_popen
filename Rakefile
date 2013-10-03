@@ -38,7 +38,15 @@ task :win_clean do
         sh 'nmake distclean'
       end
     end
-    rm 'lib/win32/right_popen.so' if File.file?('lib/win32/right_popen.so')
+
+    # remove v1.x binary directory.
+    legacy_dir = 'lib/win32'
+    ::FileUtils.rm_rf(legacy_dir) if ::File.directory?(legacy_dir)
+
+    # remove current binary for mswin.
+    binary_dir = 'lib/right_popen/windows/mswin'
+    binary_path = ::File.join(binary_dir, 'right_popen.so')
+    ::File.unlink(binary_path) if ::File.file?(binary_path)
   end
 end
 task :clean => :win_clean
@@ -50,19 +58,19 @@ task :build => [:clean] do
       ruby 'extconf.rb'
       sh 'nmake'
     end
-    FileUtils::mkdir_p 'lib/win32'
-    mv 'ext/right_popen.so', 'lib/win32'
+    binary_dir = 'lib/right_popen/windows/mswin'
+    mv 'ext/right_popen.so', binary_dir
   end
 end
 
 desc "Build a binary gem"
 task :gem => [:build] do
   if RUBY_PLATFORM =~ /mswin/
-    # the built .so file must appear under 'lib/win32' for the windows gem and
-    # the base gem task doesn't appear to handle this. this may be an issue with
-    # calculating the file list in the gemspec before the .so has actually been
-    # created. workaround is to invoke the gem build gemspec command line after
-    # the build step produces the .so file.
+    # the built .so file must appear under 'lib/.../mswin' for the windows gem
+    # and the base gem task doesn't appear to handle this. this may be an issue
+    # with calculating the file list in the gemspec before the .so has actually
+    # been created. workaround is to invoke the gem build gemspec command line
+    # after the build step produces the .so file.
     sh 'gem build right_popen.gemspec'
     FileUtils::rm_rf('pkg')
     FileUtils::mkdir_p('pkg')
