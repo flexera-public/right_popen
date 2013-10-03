@@ -56,17 +56,26 @@ module RightScale
         end
         unless @status
           # block on the thread until it dies (due to child process death).
-          @status = @wait_thread.value
+          thread_status = @wait_thread.value
 
           # an interrupted process can still return zero exit status; if we
           # interrupted it then don't treat it as successful. simulate the Linux
           # termination signal behavior here.
           if interrupted?
-            @status = ::RightScale::RightPopen::ProcessStatus.new(
-              @pid,
-              exitstatus = nil,
-              termsig    = @last_interrupt)
+            exitstatus = nil
+            termsig    = @last_interrupt
+          else
+            # mingw follows the Linux semantic of masking off all but the low
+            # word of the exitstatus while preserving the full exit code in the
+            # .to_i value. Windows does not share the Linux semantic and
+            # anything > 255 should be considered an error on Windows. the only
+            # way to communicate this properly is to capture the real exit code
+            # by down-shifting the thread_status.to_i value eight bits.
+            exitstatus = thread_status.to_i >> 8
+            termsig    = nil
           end
+          @status = ::RightScale::RightPopen::ProcessStatus.new(
+            @pid, exitstatus, termsig)
         end
         @status
       end

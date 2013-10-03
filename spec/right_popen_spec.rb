@@ -71,6 +71,22 @@ describe 'RightScale::RightPopen' do
         status.pid.should > 0
       end
 
+      if ::RightScale::RightPopen::SpecHelper.windows?
+        it "should return the right status for Windows" do
+          # Windows does not adhere to the Linux semantic of masking off any
+          # exit code value above the low word. it is important that the real
+          # exit code be relayed via exitstatus on Windows only.
+          high_word_exit_code = 3 * 256
+          command = "cmd.exe /c exit #{high_word_exit_code}"
+          status = runner.run_right_popen3(synchronicity, command)
+          status.status.exitstatus.should == high_word_exit_code
+          status.status.success?.should be_false
+          status.output_text.should == ''
+          status.error_text.should == ''
+          status.pid.should > 0
+        end
+      end
+
       it "should close all IO handlers, except STDIN, STDOUT and STDERR" do
         GC.start
         command = [
