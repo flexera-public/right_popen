@@ -108,7 +108,7 @@ module RightScale
       # Implements WindowsProcessBase#popen4_impl
       def popen4_impl(cmd, environment_hash)
         # use native API call.
-        environment_strings = ::RightScale::Windows::Utilities.environment_hash_to_string_block(environment_hash)
+        environment_strings = ::RightScale::RightPopen::Windows::Utilities.environment_hash_to_string_block(environment_hash)
         ::RightScale::RightPopen.popen4(
           cmd,
           mode = 't',
@@ -121,14 +121,14 @@ module RightScale
       def current_user_environment_hash
         # use native API call.
         environment_strings = ::RightScale::RightPopen.get_current_user_environment
-        ::RightScale::Windows::Utilities.string_block_to_environment_hash(environment_strings)
+        ::RightScale::RightPopen::Windows::Utilities.string_block_to_environment_hash(environment_strings)
       end
 
       # Implements WindowsProcessBase#machine_environment_hash
       def machine_environment_hash
         # use native API call.
         environment_strings = ::RightScale::RightPopen.get_machine_environment
-        ::RightScale::Windows::Utilities.string_block_to_environment_hash(environment_strings)
+        ::RightScale::RightPopen::Windows::Utilities.string_block_to_environment_hash(environment_strings)
       end
 
     end

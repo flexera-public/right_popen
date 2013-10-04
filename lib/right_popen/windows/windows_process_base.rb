@@ -75,7 +75,7 @@ module RightScale
 
         # merge and format environment strings, if necessary.
         environment_hash = @options[:environment] || {}
-        environment_hash = ::RightScale::Windows::Utilities.merge_environment(
+        environment_hash = ::RightScale::RightPopen::Windows::Utilities.merge_environment(
           environment_hash,
           current_user_environment_hash,
           machine_environment_hash)
