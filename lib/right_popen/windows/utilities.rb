@@ -24,33 +24,40 @@
 require 'rubygems'
 require 'right_popen'
 
-module RightScale
+module RightScale::RightPopen
   module Windows
     module Utilities
 
-      # Key class for case-insensitive hash insertion/lookup.
+      # 'immutable' key class for case-insensitive hash insertion/lookup.
       class NoCaseKey
         # Internal key
-        attr_reader :key
+        attr_reader :key, :downcase_key
 
         # Stringizes object to be used as key
-        def initialize key
+        def initialize(key)
           @key = key.to_s
+          @downcase_key = @key.downcase
+          @hashed = @downcase_key.hash
          end
 
         # Hash code
         def hash
-          @key.downcase.hash
+          @hashed
         end
 
         # Equality for hash
-        def eql? other
-          @key.downcase.hash == other.key.downcase.hash
+        def eql?(other)
+          @hashed == other.hash && @downcase_key == other.downcase_key
+        end
+
+        # Equality for array include?, etc.
+        def ==(other)
+          @hashed == other.hash && @downcase_key == other.downcase_key
         end
 
         # Sort operator
         def <=> other
-          @key.downcase <=> other.key.downcase
+          @downcase_key <=> other.downcase_key
         end
 
         # Stringizer
@@ -63,6 +70,24 @@ module RightScale
           "NoCaseKey: #{@key.inspect}"
         end
       end
+
+      # blacklist to avoid merging some env vars that should never be changed by
+      # the user or set explicitly for a child process. some are related to the
+      # WoW64 environment and so the current process values may differ from what
+      # is set in the system environment.
+      BLACKLIST_MERGE_ENV_KEYS = %w[
+        CommonProgramFiles CommonProgramFiles(x86) CommonProgramW6432
+        ComSpec
+        NUMBER_OF_PROCESSORS
+        OS
+        PROCESSOR_ARCHITECTURE PROCESSOR_IDENTIFIER
+        PROCESSOR_LEVEL PROCESSOR_REVISION
+        ProgramFiles ProgramFiles(x86) ProgramW6432
+        PSModulePath
+        TEMP TMP
+        USERDOMAIN USERNAME USERPROFILE
+        windir
+      ].map { |k| NoCaseKey.new(k) }.freeze
 
       # Hash of known environment variable keys to special merge method proc.
       SPECIAL_MERGE_ENV_KEY_HASH = {
@@ -88,17 +113,23 @@ module RightScale
         result_environment_hash = merge_environment2(::ENV, {})
 
         # machine from registry supercedes process.
-        merge_environment2(machine_environment_hash, result_environment_hash)
+        merge_environment2(
+          machine_environment_hash,
+          result_environment_hash,
+          BLACKLIST_MERGE_ENV_KEYS)
 
         # user environment from registry supercedes machine and process. the
         # system account's (default user profile) registry values are not
         # appropriate for merging, so skip it when we know we are the system.
         current_user_name = (`whoami`.chomp rescue '')
         unless current_user_name == 'nt authority\system'
-          merge_environment2(current_user_environment_hash, result_environment_hash)
+          merge_environment2(
+            current_user_environment_hash,
+            result_environment_hash,
+            BLACKLIST_MERGE_ENV_KEYS)
         end
 
-        # caller's environment supercedes all.
+        # caller's environment supercedes all with no blacklisting.
         merge_environment2(environment_hash, result_environment_hash)
 
         # result map has ordinary strings as keys.
@@ -112,28 +143,31 @@ module RightScale
       #
       # @param [Hash] from_hash as source map of string or environment keys to environment values
       # @param [Hash] to_hash as target map of string or environment keys to environment values
+      # @param [Array] blacklisted key names to avoid merging or empty
       #
       # @return [Hash] to_hash merged
-      def self.merge_environment2(from_hash, to_hash)
+      def self.merge_environment2(from_hash, to_hash, blacklisted = [])
         from_hash.each do |from_key, from_value|
           to_key = from_key.kind_of?(NoCaseKey) ?
                    from_key :
                    NoCaseKey.new(from_key)
-          to_value = to_hash[to_key]
-          if to_value
-            special_merge_proc = SPECIAL_MERGE_ENV_KEY_HASH[to_key]
-            if special_merge_proc
-              # special merge
-              to_value = special_merge_proc.call(from_value, to_value)
+          unless blacklisted.include?(to_key)
+            to_value = to_hash[to_key]
+            if to_value
+              special_merge_proc = SPECIAL_MERGE_ENV_KEY_HASH[to_key]
+              if special_merge_proc
+                # special merge
+                to_value = special_merge_proc.call(from_value, to_value)
+              else
+                # 'from' value supercedes existing 'to' value
+                to_value = from_value
+              end
             else
-              # 'from' value supercedes existing 'to' value
+              # 'from' value replaces missing 'to' value
               to_value = from_value
             end
-          else
-            # 'from' value replaces missing 'to' value
-            to_value = from_value
+            to_hash[to_key] = to_value
           end
-          to_hash[to_key] = to_value
         end
         to_hash
       end
@@ -204,7 +238,7 @@ module RightScale
           if equals_offset
             env_key = env_string[0, equals_offset]
             env_value = env_string[equals_offset + 1..-1]
-            result_hash[NoCaseKey.new(env_key)] = env_value
+            result_hash[env_key] = env_value
           end
         end
 
@@ -230,4 +264,4 @@ module RightScale
 
     end # Utilities
   end # Windows
-end # RightScale
+end # RightScale::RightPopen

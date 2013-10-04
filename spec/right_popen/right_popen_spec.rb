@@ -1,13 +1,17 @@
-require File.expand_path(File.join(File.dirname(__FILE__), 'spec_helper'))
-require File.expand_path(File.join(File.dirname(__FILE__), 'runner'))
+require ::File.expand_path('../../spec_helper', __FILE__)
+require ::File.expand_path('../../runner', __FILE__)
 
-require 'right_popen'
 require 'stringio'
 require 'tmpdir'
 
 describe 'RightScale::RightPopen' do
   def windows?
     ::RightScale::RightPopen::SpecHelper.windows?
+  end
+
+  def script_path_for(name)
+    name += '.rb' if ::File.extname(name).empty?
+    ::File.expand_path(::File.join(::File.dirname(__FILE__), 'scripts', name))
   end
 
   let(:runner) { ::RightScale::RightPopen::Runner.new }
@@ -47,7 +51,7 @@ describe 'RightScale::RightPopen' do
     context synchronicity do
 
       it "should redirect output" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_output')}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
         runner_status = runner.run_right_popen3(synchronicity, command)
         runner_status.should_not be_nil
         runner_status.status.should_not be_nil
@@ -58,10 +62,12 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should return the right status" do
-        ruby = `which ruby`.chomp  # which is assumed to be on the PATH for the Windows case
+        ruby = ::RbConfig.respond_to?(:ruby) ?
+          ::RbConfig.ruby :
+          `which ruby`.chomp  # 'which' on Windows is a custom RS utility similar to 'where' but better ;)
         command = [
           ruby,
-          File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb')),
+          script_path_for('produce_status'),
           EXIT_STATUS
         ]
         status = runner.run_right_popen3(synchronicity, command)
@@ -91,7 +97,7 @@ describe 'RightScale::RightPopen' do
         GC.start
         command = [
           RUBY_CMD,
-          File.expand_path(File.join(File.dirname(__FILE__), 'produce_status.rb')),
+          script_path_for('produce_status'),
           EXIT_STATUS
         ]
         status = runner.run_right_popen3(synchronicity, command)
@@ -107,7 +113,7 @@ describe 'RightScale::RightPopen' do
 
       it "should preserve the integrity of stdout when stderr is unavailable" do
         count = LARGE_OUTPUT_COUNTER
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_stdout_only.rb'))}\" #{count}"
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_stdout_only')}\" #{count}"
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
 
@@ -122,7 +128,7 @@ describe 'RightScale::RightPopen' do
 
       it "should preserve the integrity of stderr when stdout is unavailable" do
         count = LARGE_OUTPUT_COUNTER
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_stderr_only.rb'))}\" #{count}"
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_stderr_only')}\" #{count}"
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
 
@@ -140,7 +146,7 @@ describe 'RightScale::RightPopen' do
         exit_code = 42
         repeats = 5
         force_yield = 0.1
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{lines} #{exit_code}"
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_mixed_output')}\" #{lines} #{exit_code}"
         actual_output = StringIO.new
         actual_error = StringIO.new
         puts
@@ -173,7 +179,7 @@ describe 'RightScale::RightPopen' do
       it "should preserve interleaved output when process is spewing rapidly" do
         lines = LARGE_OUTPUT_COUNTER
         exit_code = 99
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_mixed_output.rb'))}\" #{lines} #{exit_code}"
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_mixed_output')}\" #{lines} #{exit_code}"
         status = runner.run_right_popen3(synchronicity, command, :timeout=>10)
         status.status.exitstatus.should == exit_code
 
@@ -192,7 +198,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should setup environment variables" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('print_env')}\""
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
         status.output_text.should_not include('_test_')
@@ -207,7 +213,7 @@ describe 'RightScale::RightPopen' do
           ENV['__test__'] = '42'
           old_envs = {}
           ENV.each { |k, v| old_envs[k] = v }
-          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+          command = "\"#{RUBY_CMD}\" \"#{script_path_for('print_env')}\""
           status = runner.run_right_popen3(synchronicity, command, :env=>{ :__test__ => nil })
           status.status.exitstatus.should == 0
           status.output_text.should include('PATH')
@@ -225,7 +231,7 @@ describe 'RightScale::RightPopen' do
           ENV['__test__'] = '41'
           old_envs = {}
           ENV.each { |k, v| old_envs[k] = v }
-          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+          command = "\"#{RUBY_CMD}\" \"#{script_path_for('print_env')}\""
           status = runner.run_right_popen3(synchronicity, command, :env=>{ :__test__ => '42' })
           status.status.exitstatus.should == 0
           status.output_text.should match(/^__test__=42$/)
@@ -241,7 +247,7 @@ describe 'RightScale::RightPopen' do
         # FIX: this behavior is currently specific to Windows but should probably be
         # implemented for Linux.
         it "should merge the PATH variable instead of overriding it" do
-          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'print_env.rb'))}\""
+          command = "\"#{RUBY_CMD}\" \"#{script_path_for('print_env')}\""
           status = runner.run_right_popen3(synchronicity, command, :env=>{ 'PATH' => "c:/bogus\\bin" })
           status.status.exitstatus.should == 0
           status.output_text.should include('c:\\bogus\\bin;')
@@ -279,7 +285,7 @@ describe 'RightScale::RightPopen' do
 
       it "should run repeatedly without leaking resources" do
         pending 'Set environment variable TEST_LEAK to enable' unless ENV['TEST_LEAK']
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'produce_output.rb'))}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('produce_output')}\" \"#{STANDARD_MESSAGE}\" \"#{ERROR_MESSAGE}\""
         stats = runner.run_right_popen3(synchronicity, command, :repeats=>REPEAT_TEST_COUNTER)
         stats.each do |status|
           status.status.exitstatus.should == 0
@@ -290,7 +296,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should pass input to child process" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'increment.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('increment')}\""
         status = runner.run_right_popen3(synchronicity, command, :input=>"42\n")
         status.status.exitstatus.should == 0
         status.output_text.should == "43\n"
@@ -299,7 +305,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should run long child process without any watches by default" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'sleeper.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('sleeper')}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :timeout=>nil)
         runner_status.status.exitstatus.should == 0
         runner_status.did_timeout.should be_false
@@ -308,7 +314,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should interrupt watched child process when timeout expires" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'sleeper.rb'))}\" 10"
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('sleeper')}\" 10"
         runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>0.1)
         runner_status.status.success?.should be_false
         runner_status.did_timeout.should be_true
@@ -318,7 +324,7 @@ describe 'RightScale::RightPopen' do
 
       it "should allow watched child to write files up to size limit" do
         ::Dir.mktmpdir do |watched_dir|
-          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'writer.rb'))}\" \"#{watched_dir}\""
+          command = "\"#{RUBY_CMD}\" \"#{script_path_for('writer')}\" \"#{watched_dir}\""
           runner_status = runner.run_right_popen3(synchronicity, command, :size_limit_bytes=>1000, :watch_directory=>watched_dir, :timeout=>10)
           runner_status.status.success?.should be_true
           runner_status.did_size_limit.should be_false
@@ -327,7 +333,7 @@ describe 'RightScale::RightPopen' do
 
       it "should interrupt watched child at size limit" do
         ::Dir.mktmpdir do |watched_dir|
-          command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'writer.rb'))}\" \"#{watched_dir}\""
+          command = "\"#{RUBY_CMD}\" \"#{script_path_for('writer')}\" \"#{watched_dir}\""
           runner_status = runner.run_right_popen3(synchronicity, command, :expect_size_limit=>true, :size_limit_bytes=>100, :watch_directory=>watched_dir, :timeout=>10)
           runner_status.status.success?.should be_false
           runner_status.did_size_limit.should be_true
@@ -336,7 +342,7 @@ describe 'RightScale::RightPopen' do
 
       it "should handle child processes that close stdout but keep running" do
         pending 'not implemented for windows' if windows? && :sync != synchronicity
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'stdout.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('stdout')}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :expect_timeout=>true, :timeout=>2)
         runner_status.output_text.should be_empty
         runner_status.error_text.should =~ /Closing stdout\n/
@@ -345,7 +351,7 @@ describe 'RightScale::RightPopen' do
 
       it "should handle child processes that spawn long running background processes" do
         pending 'not implemented for windows' if windows?
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'background.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('background')}\""
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == 0
         status.did_timeout.should be_false
@@ -354,7 +360,7 @@ describe 'RightScale::RightPopen' do
       end
 
       it "should run long child process without any watches by default" do
-        command = "\"#{RUBY_CMD}\" \"#{File.expand_path(File.join(File.dirname(__FILE__), 'sleeper.rb'))}\""
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('sleeper')}\""
         runner_status = runner.run_right_popen3(synchronicity, command, :timeout=>nil)
         runner_status.status.exitstatus.should == 0
         runner_status.did_timeout.should be_false

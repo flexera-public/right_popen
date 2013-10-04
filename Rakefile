@@ -9,8 +9,13 @@ require 'spec/rake/spectask'
 require 'rbconfig'
 
 def list_spec_files
-  list = Dir['spec/**/*_spec.rb']
-  list.delete_if { |path| path.include?('/linux/') } if RUBY_PLATFORM =~ /mswin/
+  list = ::Dir['spec/**/*_spec.rb']
+  case RUBY_PLATFORM
+  when /mswin|win32|dos|mingw|cygwin/
+    list.delete_if { |path| path.include?('/linux/') }
+  else
+    list.delete_if { |path| path.include?('/windows/') }
+  end
   list
 end
 
