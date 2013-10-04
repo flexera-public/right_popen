@@ -23,8 +23,7 @@
 
 require 'rubygems'
 require 'eventmachine'
-
-require ::File.expand_path(::File.join(::File.dirname(__FILE__), 'process'))
+require 'right_popen'
 
 module RightScale::RightPopen
 
@@ -79,7 +78,7 @@ module RightScale::RightPopen
     # callback mechanism is deprecated after EM v0.12.8 but the win32 EM code
     # has never advanced beyond that point.
     def notify_readable
-      data = ::RightScale::RightPopen.async_read(@stream_out)
+      data = @process.async_read(@stream_out)
       receive_data(data) if (data && data.length > 0)
       detach unless data
     end
@@ -100,13 +99,21 @@ module RightScale::RightPopen
 
     # Callback from EM to unbind.
     def unbind
-      # We force the stderr watched handler to go away so that
-      # we don't end up with a broken pipe
-      @stderr_eventable.force_detach if @stderr_eventable
+      @stream_out.close
+
+      # need a handshake for when both stdout and stderr are unbound.
+      if @stderr_eventable
+        @stderr_eventable.finish_unbind(self)
+      else
+        finish_unbind
+      end
+    end
+
+    # Finishes unbind for stdout and stderr when both receive unbind.
+    def finish_unbind
       @target.timeout_handler if @process.timer_expired?
       @target.size_limit_handler if @process.size_limit_exceeded?
       @target.exit_handler(get_status)
-      @stream_out.close
     end
   end
 
@@ -117,20 +124,23 @@ module RightScale::RightPopen
   module StdErrHandler
 
     # === Parameters
+    # @param [Process] process that was executed
     # @param [Object] target defining handler methods to be called
     # @param [IO] stream_err as standard error stream
-    def initialize(target, stream_err)
+    def initialize(process, target, stream_err)
+      @process = process
       @target = target
       @stderr_handler = target.method(:stderr_handler)
       @stream_err = stream_err
+      @stdout_eventable = nil
       @unbound = false
     end
 
     # Callback from EM to asynchronously read the stderr stream. Note that this
-    # callback mechanism is deprecated after EM v0.12.8
+    # callback mechanism is deprecated after EM v0.12.8 for Linux but not for
+    # Windows.
     def notify_readable
-      # call native win32 implementation for async_read
-      data = ::RightScale::RightPopen.async_read(@stream_err)
+      data = @process.async_read(@stream_err)
       receive_data(data) if (data && data.length > 0)
       detach unless data
     end
@@ -145,13 +155,18 @@ module RightScale::RightPopen
     def unbind
       @unbound = true
       @stream_err.close
+
+      # handshake.
+      @stdout_eventable.finish_unbind if @stdout_eventable
     end
 
-    # Forces detachment of the stderr handler on EM's next tick.
-    def force_detach
-      # Use next tick to prevent issue in EM where descriptors list
-      # gets out-of-sync when calling detach in an unbind callback
-      ::EM.next_tick { detach unless @unbound }
+    # Finishes unbind for stdout and stderr when both receive unbind.
+    def finish_unbind(stdout_eventable)
+      if @unbound
+        stdout_eventable.finish_unbind
+      else
+        @stdout_eventable = stdout_eventable
+      end
     end
   end
 
@@ -166,17 +181,16 @@ module RightScale::RightPopen
         process = ::RightScale::RightPopen::Process.new(options)
         process.spawn(cmd, target)
 
-        # close input immediately unless streaming. the EM implementation is
-        # flawed so it is important to not create an eventable for the input
-        # stream unless required. the issue stems from EM thinking that file
-        # handles and socket handles come from the same pool in the stdio
-        # libraries; in Linux they come from the same pool, in Windows they don't.
+        # close input immediately unless streaming in from a string buffer. see
+        # below for remarks on why this is not a good idea with Windows EM. an
+        # alternative is to pipe input from a command or a file in the command
+        # line given to this method.
         process.stdin.close unless options[:input]
 
         # attach handlers to event machine and let it monitor incoming data. the
         # streams aren't used directly by the connectors except that they are
         # closed on unbind.
-        stderr_eventable = ::EM.watch(process.stderr, ::RightScale::RightPopen::StdErrHandler, target, process.stderr) do |c|
+        stderr_eventable = ::EM.watch(process.stderr, ::RightScale::RightPopen::StdErrHandler, process, target, process.stderr) do |c|
           c.notify_readable = true
         end
         ::EM.watch(process.stdout, ::RightScale::RightPopen::StdOutHandler, process, target, stderr_eventable, process.stdout) do |c|
@@ -189,16 +203,22 @@ module RightScale::RightPopen
           # in this case
           target.watch_handler(process)
         end
+
+        # the EM implementation is flawed so it is important to not create an
+        # eventable for the input stream unless required. the issue stems from
+        # EM thinking that file handles and socket handles come from the same
+        # pool in the stdio libraries; in Linux they come from the same pool;
+        # in Windows they come from different pools that increment
+        # independendently and can coincidentally use the same ID numbers at an
+        # unpredictable point in execution. confusing file numbers with socket
+        # numbers can lead to treating sockets as files and vice versa with
+        # unexpected failures for read/write access, etc.
         if options[:input]
           ::EM.attach(process.stdin, ::RightScale::RightPopen::StdInHandler, options, process.stdin)
         end
 
-        # create a periodic watcher only if needed in the win32 async case because
-        # the exit handler is tied to EM eventable detachment.
-        #
-        # TEAL FIX: does this logic need to differ from Linux or can they share
-        # the same code? they probably differ because the mswin32 implementation
-        # of EM stopped many versions back.
+        # create a periodic watcher only if needed because the exit handler is
+        # tied to EM eventable detachment.
         if process.needs_watching?
           ::EM.next_tick do
             watch_process(process, 0.1, target)

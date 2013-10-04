@@ -22,9 +22,9 @@
 #++
 
 require 'rubygems'
+require 'right_popen'
 require 'eventmachine'
-
-require File.expand_path(File.join(File.dirname(__FILE__), "process"))
+require 'yaml'
 
 module RightScale::RightPopen
 
@@ -59,8 +59,13 @@ module RightScale::RightPopen
 
     def unbind
       if @data.size > 0
-        e = ::Marshal.load(@data)
-        raise (::Exception === e ? e : "unknown failure: saw #{e} on status channel")
+        error_data = ::YAML.load(@data)
+        status_fd_error = ::RightScale::RightPopen::ProcessError.new(
+          "#{error_data['class']}: #{error_data['message']}")
+        if error_data['backtrace']
+          status_fd_error.set_backtrace(error_data['backtrace'])
+        end
+        raise status_fd_error
       end
     end
   end

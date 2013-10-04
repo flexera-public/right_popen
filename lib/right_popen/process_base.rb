@@ -21,14 +21,14 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
+require 'rubygems'
+require 'right_popen'
 require 'thread'
 require 'yaml'
 
 module RightScale
   module RightPopen
     class ProcessBase
-
-      class ProcessError < Exception; end
 
       attr_reader :pid, :stdin, :stdout, :stderr, :status_fd, :status
       attr_reader :start_time, :stop_time, :channels_to_finish
@@ -147,6 +147,7 @@ module RightScale
         @status = nil
         @last_interrupt = nil
         @channels_to_finish = nil
+        @wait_thread = nil
 
         if @size_limit_bytes = @options[:size_limit_bytes]
           @watch_directory = @options[:watch_directory] || @options[:directory] || ::Dir.pwd
@@ -206,7 +207,7 @@ module RightScale
       # @return [TrueClass] always true
       def sync_exit_with_target
         abandon = false
-        last_exception = nil
+        status_fd_data = []
         begin
           while true
             channels_to_watch = @channels_to_finish.map { |ctf| ctf.last }
@@ -224,10 +225,7 @@ module RightScale
                 data = dead ? channel.gets(nil) : channel.gets
                 if data
                   if key == :status_fd
-                    error_data = ::YAML.load(data)
-                    last_exception = ProcessError.new(
-                      "#{error_data['class']}: #{error_data['message']}")
-                    last_exception.set_backtrace(error_data['backtrace']) if error_data['backtrace']
+                    status_fd_data << data
                   else
                     @target.method(key).call(data)
                   end
@@ -246,7 +244,16 @@ module RightScale
             end
           end
           wait_for_exit_status
-          raise last_exception if last_exception
+          unless status_fd_data.empty?
+            data = status_fd_data.join
+            error_data = ::YAML.load(data)
+            status_fd_error = ::RightScale::RightPopen::ProcessError.new(
+              "#{error_data['class']}: #{error_data['message']}")
+            if error_data['backtrace']
+              status_fd_error.set_backtrace(error_data['backtrace'])
+            end
+            raise status_fd_error
+          end
           @target.timeout_handler if timer_expired?
           @target.size_limit_handler if size_limit_exceeded?
           @target.exit_handler(@status)
@@ -290,7 +297,8 @@ module RightScale
               next_interrupt = sigs.first
             end
             unless next_interrupt
-              raise ProcessError, 'Unable to kill child process'
+              raise ::RightScale::RightPopen::ProcessError,
+                    'Unable to kill child process'
             end
             @last_interrupt = next_interrupt
 
@@ -322,7 +330,9 @@ module RightScale
       def start_timer
         # start timer when process comes alive (ruby processes are slow to
         # start in Windows, etc.).
-        raise ProcessError.new("Process not started") unless @pid
+        unless @pid
+          raise ::RightScale::RightPopen::ProcessError, 'Process not started'
+        end
         @start_time = ::Time.now
         @stop_time  = @options[:timeout_seconds] ?
                       (@start_time + @options[:timeout_seconds]) :
