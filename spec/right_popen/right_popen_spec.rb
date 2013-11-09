@@ -4,7 +4,7 @@ require ::File.expand_path('../../runner', __FILE__)
 require 'stringio'
 require 'tmpdir'
 
-describe 'RightScale::RightPopen' do
+describe RightScale::RightPopen do
   def windows?
     ::RightScale::RightPopen::SpecHelper.windows?
   end
@@ -208,6 +208,17 @@ describe 'RightScale::RightPopen' do
         status.pid.should > 0
       end
 
+      it 'should handle non-string environment variables' do
+        command = "\"#{RUBY_CMD}\" \"#{script_path_for('print_env')}\""
+        status = runner.run_right_popen3(synchronicity, command)
+        status.status.exitstatus.should == 0
+        status.output_text.should_not include('_test_')
+        status = runner.run_right_popen3(synchronicity, command, :env=>{ :__test__ => false })
+        status.status.exitstatus.should == 0
+        status.output_text.should match(/^__test__=false$/)
+        status.pid.should > 0
+      end
+
       it "should clear environment variables" do
         begin
           ENV['__test__'] = '42'
@@ -381,6 +392,12 @@ describe 'RightScale::RightPopen' do
         # or mocking out the relevant behavior.
       end
 
-    end
-  end
-end
+      it 'should raise ENOENT for invalid executables' do
+        command = 'nosuchexecutable'
+        expect{ runner.run_right_popen3(synchronicity, [command]) }.
+          to raise_exception(::RightScale::RightPopen::ProcessError, /nosuchexecutable/)
+      end
+
+    end # synchronicity
+  end # each synchronicity
+end # RightScale::RightPopen
