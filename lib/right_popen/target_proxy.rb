@@ -32,19 +32,20 @@ module RightScale
     class TargetProxy
 
       HANDLER_NAME_TO_PARAMETER_COUNT = {
-        :exit_handler       => 1,
-        :pid_handler        => 1,
-        :size_limit_handler => 0,
-        :stderr_handler     => 1,
-        :stdout_handler     => 1,
-        :timeout_handler    => 0,
-        :watch_handler      => 1,
+        :exit_handler            => 1,
+        :pid_handler             => 1,
+        :size_limit_handler      => 0,
+        :stderr_handler          => 1,
+        :stdout_handler          => 1,
+        :timeout_handler         => 0,
+        :watch_handler           => 1,
+        :async_exception_handler => 1,
       }
 
       def initialize(options = {})
         if options[:target].nil? &&
            !(options.keys & HANDLER_NAME_TO_PARAMETER_COUNT.keys).empty?
-          raise ArgumentError, "Missing target"
+          raise ::ArgumentError, 'Missing target'
         end
         @target = options[:target]  # hold target reference (if any) against GC
 

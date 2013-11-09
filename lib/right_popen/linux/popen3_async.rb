@@ -32,12 +32,13 @@ module RightScale::RightPopen
   raise "#{StatusHandler.name} is already defined" if defined?(StatusHandler)
 
   module StatusHandler
-    def initialize(file_handle)
+    def initialize(file_handle, target)
       # Voodoo to make sure that Ruby doesn't gc the file handle
       # (closing the stream) before we're done with it.  No, oddly
       # enough EventMachine is not good about holding on to this
       # itself.
       @handle = file_handle
+      @target = target
       @data = ""
     end
 
@@ -65,7 +66,9 @@ module RightScale::RightPopen
         if error_data['backtrace']
           status_fd_error.set_backtrace(error_data['backtrace'])
         end
-        raise status_fd_error
+        if @target
+          @target.async_exception_handler(status_fd_error) rescue nil
+        end
       end
     end
   end
@@ -137,7 +140,7 @@ module RightScale::RightPopen
 
         # connect EM eventables to open streams.
         handlers = []
-        handlers << ::EM.attach(process.status_fd, ::RightScale::RightPopen::StatusHandler, process.status_fd)
+        handlers << ::EM.attach(process.status_fd, ::RightScale::RightPopen::StatusHandler, process.status_fd, target)
         handlers << ::EM.attach(process.stderr, ::RightScale::RightPopen::PipeHandler, process.stderr, target, :stderr_handler)
         handlers << ::EM.attach(process.stdout, ::RightScale::RightPopen::PipeHandler, process.stdout, target, :stdout_handler)
         handlers << ::EM.attach(process.stdin, ::RightScale::RightPopen::InputHandler, process.stdin, options[:input])
@@ -152,13 +155,16 @@ module RightScale::RightPopen
 
         # periodic watcher.
         watch_process(process, 0.1, target, handlers)
-      rescue
+      rescue Exception => e
         # we can't raise from the main EM thread or it will stop EM.
         # the spawn method will signal the exit handler but not the
         # pid handler in this case since there is no pid. any action
         # (logging, etc.) associated with the failure will have to be
         # driven by the exit handler.
-        target.exit_handler(process.status) rescue nil if target && process
+        if target
+          target.async_exception_handler(e) rescue nil
+          target.exit_handler(process.status) rescue nil if process
+        end
       end
     end
     true
@@ -193,13 +199,18 @@ module RightScale::RightPopen
           target.size_limit_handler rescue nil if process.size_limit_exceeded?
           target.exit_handler(process.status) rescue nil
         end
-      rescue
+      rescue Exception => e
         # we can't raise from the main EM thread or it will stop EM.
         # the spawn method will signal the exit handler but not the
         # pid handler in this case since there is no pid. any action
         # (logging, etc.) associated with the failure will have to be
         # driven by the exit handler.
-        target.exit_handler(process.status) rescue nil if target && process
+        if target
+          target.async_exception_handler(e) rescue nil
+          status = process && process.status
+          status ||= ::RightScale::RightPopen::ProcessStatus.new(nil, 1)
+          target.exit_handler(status)
+        end
       end
     end
     true

@@ -224,13 +224,18 @@ module RightScale::RightPopen
             watch_process(process, 0.1, target)
           end
         end
-      rescue
+      rescue Exception => e
         # we can't raise from the main EM thread or it will stop EM.
         # the spawn method will signal the exit handler but not the
         # pid handler in this case since there is no pid. any action
         # (logging, etc.) associated with the failure will have to be
         # driven by the exit handler.
-        target.exit_handler(process.status) rescue nil if target && process
+        if target
+          target.async_exception_handler(e) rescue nil
+          status = process && process.status
+          status ||= ::RightScale::RightPopen::ProcessStatus.new(nil, 1)
+          target.exit_handler(status)
+        end
       end
     end
 
@@ -264,12 +269,16 @@ module RightScale::RightPopen
           end
           watch_process(process, [wait_time * 2, 1].min, target)
         end
-      rescue
+      rescue Exception => e
         # we can't raise from the main EM thread or it will stop EM.
         # the spawn method will signal the exit handler but not the
         # pid handler in this case since there is no pid. any action
         # (logging, etc.) associated with the failure will have to be
         # driven by the exit handler.
+        if target
+          target.async_exception_handler(e) rescue nil
+          target.exit_handler(process.status) rescue nil if process
+        end
       end
     end
     true
