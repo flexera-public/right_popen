@@ -42,10 +42,11 @@ module RightScale
 
           @expect_timeout    = options[:expect_timeout]
           @expect_size_limit = options[:expect_size_limit]
+          @async_exception   = nil
         end
 
         attr_accessor :output_text, :error_text, :status, :pid
-        attr_accessor :did_timeout, :did_size_limit
+        attr_accessor :did_timeout, :did_size_limit, :async_exception
 
         def on_read_stdout(data)
           sleep @force_yield if @force_yield
@@ -77,6 +78,10 @@ module RightScale
         def on_exit(status)
           @status = status
           @callback.call(self)
+        end
+
+        def on_async_exception(async_exception)
+          @async_exception = async_exception
         end
       end
 
@@ -157,13 +162,14 @@ module RightScale
       def do_right_popen3(synchronicity, command, runner_options, popen3_options, &callback)
         runner_status = RunnerStatus.new(command, runner_options, &callback)
         popen3_options = {
-          :target             => runner_status,
-          :stdout_handler     => :on_read_stdout,
-          :stderr_handler     => :on_read_stderr,
-          :pid_handler        => :on_pid,
-          :timeout_handler    => :on_timeout,
-          :size_limit_handler => :on_size_limit,
-          :exit_handler       => :on_exit
+          :target                  => runner_status,
+          :stdout_handler          => :on_read_stdout,
+          :stderr_handler          => :on_read_stderr,
+          :pid_handler             => :on_pid,
+          :timeout_handler         => :on_timeout,
+          :size_limit_handler      => :on_size_limit,
+          :exit_handler            => :on_exit,
+          :async_exception_handler => :on_async_exception
         }.merge(popen3_options)
         case synchronicity
         when :sync
@@ -209,6 +215,7 @@ module RightScale
         else
           EM.stop
         end
+        last_exception ||= runner_status.async_exception
         last_exception
       end
     end

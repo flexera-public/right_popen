@@ -152,6 +152,8 @@ module RightScale::RightPopen
                    from_key :
                    NoCaseKey.new(from_key)
           unless blacklisted.include?(to_key)
+            # ensure from_value is string unless nil, which is used to clear.
+            from_value = from_value.nil? ? nil : from_value.to_s
             to_value = to_hash[to_key]
             if to_value
               special_merge_proc = SPECIAL_MERGE_ENV_KEY_HASH[to_key]

@@ -1,7 +1,4 @@
-$:.push File.expand_path("../lib", __FILE__)
-require "right_popen/version"
-
-spec = Gem::Specification.new do |spec|
+spec = ::Gem::Specification.new do |spec|
   platforms = [:linux, :mswin, :mingw]
   case RUBY_PLATFORM
   when /mswin/
@@ -17,7 +14,7 @@ spec = Gem::Specification.new do |spec|
   end
 
   spec.name      = 'right_popen'
-  spec.version   = RightScale::RightPopen::VERSION
+  spec.version   = '2.0.2'
   spec.authors   = ['Scott Messier', 'Raphael Simon', 'Tony Spataro']
   spec.email     = 'scott@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'

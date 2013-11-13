@@ -86,7 +86,9 @@ module RightScale
           cmd.flatten.each_with_index do |token, token_index|
             token = token.to_s
             if token_index == 0
-              token = self.class.find_executable_in_path(token)
+              executable = token
+              token = self.class.find_executable_in_path(executable)
+              raise ::Errno::ENOENT.new(executable) unless token
             end
             escaped << self.class.quoted_command_token(token)
           end
@@ -102,7 +104,10 @@ module RightScale
             token = cmd
             remainder = ''
           end
-          token = self.class.find_executable_in_path(token)
+
+          executable = token
+          token = self.class.find_executable_in_path(executable)
+          raise ::Errno::ENOENT.new(executable) unless token
           token = self.class.quoted_command_token(token)
           if remainder.empty?
             cmd = token
@@ -135,12 +140,16 @@ module RightScale
         @stdin, @stdout, @stderr, @pid = result
         start_timer
         true
-      rescue
+      rescue Exception => e
         # catch-all for failure to spawn process ensuring a non-nil status. the
         # PID most likely is nil but the exit handler can be invoked for async.
         safe_close_io
         @status ||= ::RightScale::RightPopen::ProcessStatus.new(@pid, 1)
-        raise
+
+        # raise ProcessError for consistency with Linux fork&exec behavior.
+        pe = ::RightScale::RightPopen::ProcessError.new("#{e.class}: #{e.message}")
+        pe.set_backtrace(e.backtrace)
+        raise pe
       end
 
       # Performs an asynchronous (non-blocking) read on the given I/O object.
@@ -169,6 +178,10 @@ module RightScale
           # note that File.executable? returns a false positive in Windows for
           # directory paths, so only use File.file?
           return executable_path(token) if File.file?(token)
+
+          # if slashes (forward or back) are present then the path is a missing
+          # relative or absolute executable path and cannot use PATH resolution.
+          return nil if token.index('/') || token.index('\\')
 
           # must search all known (executable) path extensions unless the
           # explicit extension was given. this handles a case such as 'curl'

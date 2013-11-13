@@ -148,6 +148,7 @@ module RightScale
     # @option options [Integer|String] :user or uid for forked process (linux only)
     # @option options [Symbol] :watch_handler called periodically with process during watch; return true to continue, false to abandon (sync only)
     # @option options [String] :watch_directory to monitor for child process writing files
+    # @option options [Symbol] :async_exception_handler target method called if an exception is handled (on another thread)
     #
     # === Returns
     # @return [TrueClass] always true
