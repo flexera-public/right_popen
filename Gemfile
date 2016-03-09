@@ -1,21 +1,24 @@
-source 'http://s3.amazonaws.com/rightscale_rightlink_gems_dev'
 source 'https://rubygems.org'
 
-# We have custom builds of some gems containing fixes and patches that are specific
-# to RightScale. Gems in the "custom" group are published by RightScale to our
-# custom gem repository (http://s3.amazonaws.com/rightscale_rightlink_gems_dev).
-group :custom do
-  gem 'eventmachine', '~> 1.0.0.4'
-end
+gem 'eventmachine', '~> 1.0.8'
 
 group :development do
-  gem 'rake',     '0.8.7'
-  gem 'rspec',    '~> 1.3.1'
-  gem 'flexmock', '~> 0.8.11'
+  # Omit these from gemspec since many RubyGems versions are silly and install
+  # development dependencies even when doing 'gem install'
+  gem 'rake'
+  gem 'rspec',    '~> 2.0'
+  gem 'flexmock', '~> 0.9'
+
+  gem 'right_develop'
+end
+
+group :debugger do
+  gem 'pry'
+  gem 'pry-byebug'
 end
 
 group :windows do
-  # TEAL NOTE: bundler cannot distinguish between mswin and mingw so when gems
+  # NOTE: bundler cannot distinguish between mswin and mingw so when gems
   # are locked for the old mswin platform we have to guard it with
   # RUBY_PLATFORM. as far as bundler is concerned, mingw extends mswin and is
   # indistinguishable from it.

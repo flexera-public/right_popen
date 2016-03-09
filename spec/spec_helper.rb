@@ -1,7 +1,7 @@
 require 'rubygems'
 require 'bundler/setup'
-require 'spec'
 require 'flexmock'
+require 'rspec'
 require 'right_popen'
 
 RUBY_CMD         = 'ruby'

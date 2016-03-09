@@ -14,9 +14,9 @@ spec = ::Gem::Specification.new do |spec|
   end
 
   spec.name      = 'right_popen'
-  spec.version   = '2.0.2'
+  spec.version   = '3.0.1'
   spec.authors   = ['Scott Messier', 'Raphael Simon', 'Tony Spataro']
-  spec.email     = 'scott@rightscale.com'
+  spec.email     = 'support@rightscale.com'
   spec.homepage  = 'https://github.com/rightscale/right_popen'
   case platform
   when :mswin
@@ -30,7 +30,7 @@ spec = ::Gem::Specification.new do |spec|
   spec.has_rdoc = true
   spec.rdoc_options = ["--main", "README.rdoc", "--title", "RightPopen"]
   spec.extra_rdoc_files = ["README.rdoc"]
-  spec.required_ruby_version = '>= 1.8.6'
+  spec.required_ruby_version = '>= 1.9.3'
   spec.rubyforge_project = %q{right_popen}
 
   spec.description = <<-EOF
@@ -47,8 +47,8 @@ EOF
   else
     extension_dir = ''
   end
-  candidates = Dir.glob("{#{extension_dir}lib,spec}/**/*") +
-               ["LICENSE", "README.rdoc", "Rakefile", "right_popen.gemspec"]
+  candidates = ::Dir.glob("{#{extension_dir}lib}/**/*") +
+               %w(LICENSE README.rdoc right_popen.gemspec)
   exclusions = [
     'Makefile', '.obj', '.pdb', '.def', '.exp', '.lib',
     'win32/right_popen.so'  # original .so directory, now mswin
@@ -81,7 +81,4 @@ EOF
     spec.add_runtime_dependency('win32-process', '0.6.1')
     spec.add_development_dependency('win32console', '~> 1.3.0')
   end
-  spec.add_development_dependency('rspec', "~> 1.3")
-  spec.add_development_dependency('rake', "~> 0.8.7")
-  spec.add_development_dependency('flexmock')
 end

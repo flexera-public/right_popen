@@ -1,5 +1,5 @@
-#-- -*-ruby-*-
-# Copyright: Copyright (c) 2010-2016 RightScale, Inc.
+#--
+# Copyright: Copyright (c) 2016 RightScale, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,13 +21,12 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require 'rubygems'
-require 'bundler/setup'
+require 'rubygems/package_task'
 
-require 'fileutils'
-require 'rake'
-require 'rake/clean'
+desc "Build right_popen gem"
+::Gem::PackageTask.new(::Gem::Specification.load("right_popen.gemspec")) do |package|
+  package.need_zip = true
+  package.need_tar = true
+end
 
-::Dir['tasks/**/*.rake'].each { |path| load path }
-
-task :default => :spec
+CLEAN.include('pkg')
