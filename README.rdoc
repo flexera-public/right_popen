@@ -1,7 +1,5 @@
 = RightPopen
 
-Maintained by the RightScale Teal Team
-
 == DESCRIPTION
 
 === Synopsis
@@ -17,7 +15,7 @@ documentation.
 Also use the built-in issues tracker (https://github.com/rightscale/right_popen/issues)
 to report issues.
 
-Maintained by the RightScale Teal Team
+Maintained by the RightScale Sapphire Team
 
 == USAGE
 
@@ -113,7 +111,7 @@ the RightPopen tests:
 
 <b>RightPopen</b>
 
-Copyright:: Copyright (c) 2010-2013 RightScale, Inc.
+Copyright:: Copyright (c) 2010-2016 RightScale, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
