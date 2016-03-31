@@ -1,5 +1,15 @@
 require 'rubygems'
 require 'bundler/setup'
+
+# legacy rspec depends on Test::Unit, which fails rspec runs that have any non-
+# Test::Unit arguments. disable this nonsense.
+require 'test/unit'
+module ::Test::Unit::Options
+  def process_args(args = [])
+    {}
+  end
+end
+
 require 'flexmock'
 require 'rspec'
 require 'right_popen'
