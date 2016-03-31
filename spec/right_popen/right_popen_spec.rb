@@ -95,6 +95,12 @@ describe RightScale::RightPopen do
 
       it "should close all IO handlers, except STDIN, STDOUT and STDERR" do
         GC.start
+        initial_open_io_count = 0
+        ObjectSpace.each_object(IO) do |io|
+          if ![STDIN, STDOUT, STDERR].include?(io)
+            initial_open_io_count += 1 unless io.closed?
+          end
+        end
         command = [
           RUBY_CMD,
           script_path_for('produce_status'),
@@ -102,13 +108,13 @@ describe RightScale::RightPopen do
         ]
         status = runner.run_right_popen3(synchronicity, command)
         status.status.exitstatus.should == EXIT_STATUS
-        useless_handlers = 0
+        still_open_io_count = 0
         ObjectSpace.each_object(IO) do |io|
           if ![STDIN, STDOUT, STDERR].include?(io)
-            useless_handlers += 1 unless io.closed?
+            still_open_io_count += 1 unless io.closed?
           end
         end
-        useless_handlers.should == 0
+        still_open_io_count.should == initial_open_io_count
       end
 
       it "should preserve the integrity of stdout when stderr is unavailable" do
