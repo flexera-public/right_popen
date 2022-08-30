@@ -1,0 +1,52 @@
+name: "Run Tests"
+on:
+  push:
+    branches:
+      - master
+      - "*_cow"
+    tags:
+      - release*
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  # HOME required by Setup Git
+  HOME: ${{ github.workspace }}
+  RACK_ENV: integration
+
+# Cancel previous runs for same github.ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: "Test"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-version: ['2.1']
+
+    steps:
+      # Force SSH authentication for repositories with HTTPS references
+      - name: Git Config
+        run: |
+          git config --global --add url.ssh://git@github.com/flexera/.insteadof https://github.com/flexera/
+          git config --global --add url.ssh://git@github.com/rightscale/.insteadof https://github.com/rightscale/
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
+
+      - name: Run Spec
+        run: |
+          bundle exec rake spec
